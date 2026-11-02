@@ -90,7 +90,10 @@ export const SOUTH_BAY_CITIES = [
   "Carson",
   "Hawthorne",
   "Lawndale",
+  "Inglewood",
+  "Harbor City",
   "San Pedro",
+  "Wilmington",
 ] as const;
 
 export function isPracticeType(v: unknown): v is PracticeType {
