@@ -8,7 +8,9 @@ import "server-only";
 const BASE = process.env.OPENAI_BASE_URL || "https://api.openai.com/v1";
 // gpt-5-mini: much higher rate limits than larger models on new API accounts.
 const MODEL = process.env.OPENAI_MODEL || "gpt-5-mini";
-const TIMEOUT_MS = 45000;
+// The whole ChatGPT step must finish inside the 60s function limit with room to spare.
+const BUDGET_MS = 42000;
+const MIN_CALL_MS = 8000;
 
 export function openaiConfigured(): boolean {
   return Boolean(process.env.OPENAI_API_KEY);
@@ -29,7 +31,7 @@ interface ResponsesApi {
   output?: { type: string; content?: { type?: string; text?: string }[] }[];
 }
 
-async function ask(question: string, city: string, retry = true): Promise<string | null> {
+async function ask(question: string, city: string, timeoutMs: number, retry = true): Promise<string | null> {
   try {
     const res = await fetch(`${BASE}/responses`, {
       method: "POST",
@@ -46,14 +48,18 @@ async function ask(question: string, city: string, retry = true): Promise<string
         ],
         input: question,
       }),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
       cache: "no-store",
     });
     if (res.status === 429 && retry) {
       // Rate limited: wait as long as OpenAI asks (capped), then try once more.
-      const wait = Math.min(8, Number(res.headers.get("retry-after")) || 3);
-      await new Promise((r) => setTimeout(r, wait * 1000));
-      return ask(question, city, false);
+      const wait = Math.min(8, Number(res.headers.get("retry-after")) || 3) * 1000;
+      if (timeoutMs - wait < MIN_CALL_MS) {
+        lastAiError = "429 rate_limit_exceeded";
+        return null;
+      }
+      await new Promise((r) => setTimeout(r, wait));
+      return ask(question, city, timeoutMs - wait, false);
     }
     if (!res.ok) {
       const text = await res.text().catch(() => "");
@@ -97,8 +103,11 @@ export async function chatgptMentions(opts: {
   let asked = 0;
   let named = 0;
   const excerpts: string[] = [];
+  const deadline = Date.now() + BUDGET_MS;
   for (const q of questions) {
-    const a = await ask(q, opts.city);
+    const left = deadline - Date.now();
+    if (left < MIN_CALL_MS) break;
+    const a = await ask(q, opts.city, left);
     if (a === null) continue;
     asked++;
     excerpts.push(a.replace(/\s+/g, " ").slice(0, 500));
