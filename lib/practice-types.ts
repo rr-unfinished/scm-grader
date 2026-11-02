@@ -44,8 +44,9 @@ export const PRACTICE_TYPES: Record<PracticeType, PracticeTypeInfo> = {
     schemaType: "Dentist",
     competitorSuffix: "Orthodontics",
     searchQuery: "orthodontist",
-    expectedTypes: ["orthodontist"],
-    categoryKeywords: ["orthodont"],
+    // Google's API has no orthodontist type; orthodontists come back as "Dentist".
+    expectedTypes: ["orthodontist", "dentist", "dental_clinic"],
+    categoryKeywords: ["orthodont", "dentist", "dental"],
   },
   clinic: {
     label: "Medical clinic",
@@ -83,8 +84,9 @@ export const PRACTICE_TYPES: Record<PracticeType, PracticeTypeInfo> = {
     schemaType: "MedicalBusiness",
     competitorSuffix: "Aesthetics",
     searchQuery: "med spa",
-    expectedTypes: ["medical_spa", "skin_care_clinic"],
-    categoryKeywords: ["med spa", "medical spa", "skin care", "aesthetic"],
+    // Google's API often reports med spas as plain "Spa".
+    expectedTypes: ["medical_spa", "skin_care_clinic", "spa"],
+    categoryKeywords: ["med spa", "medical spa", "skin care", "aesthetic", "spa"],
   },
   pt: {
     label: "Physical therapy",

@@ -9,7 +9,6 @@ import { mergeYou, sampleCategories } from "./sample-report";
 import { scoreCategory, summarize } from "./scoring";
 import type { Category, Check, Competitor, GradeRequest, Report } from "./types";
 
-const DAY = 24 * 60 * 60 * 1000;
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export async function buildLiveReport(req: GradeRequest & { placeId: string }): Promise<Report> {
@@ -128,12 +127,6 @@ function reviewsCategory(place: PlaceDetails, others: SearchResult[]): Category 
   const rating = place.rating;
   const count = place.userRatingCount ?? 0;
 
-  const times = (place.reviews ?? [])
-    .map((r) => (r.publishTime ? Date.parse(r.publishTime) : NaN))
-    .filter((n) => !Number.isNaN(n));
-  const newest = times.length ? Math.max(...times) : null;
-  const daysAgo = newest ? Math.max(0, Math.floor((Date.now() - newest) / DAY)) : null;
-
   const topRatings = others
     .slice(0, 5)
     .map((o) => o.rating)
@@ -156,14 +149,6 @@ function reviewsCategory(place: PlaceDetails, others: SearchResult[]): Category 
       value: `${count} review${count === 1 ? "" : "s"}`,
       passed: count >= 100,
       weight: 6,
-    },
-    {
-      id: "recent-review",
-      title: "A new review in the last 30 days",
-      detail: "Recent reviews tell Google and patients you are active.",
-      value: daysAgo === null ? "None found" : daysAgo === 0 ? "Today" : `${daysAgo} day${daysAgo === 1 ? "" : "s"} ago`,
-      passed: daysAgo !== null && daysAgo <= 30,
-      weight: 5,
     },
     {
       id: "vs-local",

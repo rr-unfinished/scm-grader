@@ -59,7 +59,8 @@ app/api/places/autocomplete/route.ts   Practice search, proxied so the key stays
 
 - **Practice search** uses Places Autocomplete, limited to the South Bay. Picking a result gives the exact Google listing, so the scan never guesses which practice was meant.
 - **Map rank** runs a Text Search for the practice type (for example "dentist") centered on the chosen city, then finds the practice's position in the top 20. Real rank shifts with where a patient searches, and the report says so.
-- **Profile and review checks** come from Place Details: category, website, phone, hours, photos, rating, review count and newest review. Google returns at most 10 photos and 5 reviews per place, so those checks use thresholds that fit.
+- **Profile and review checks** come from Place Details: category, website, phone, hours, photos, rating and review count. Google returns at most 10 photos per place, so the photo check uses a 10-photo threshold.
+- **Not checked:** review recency. Google's API returns only 5 "most relevant" reviews, not the newest, so it can't tell when the last review came in. Orthodontists and med spas are graded leniently on category, because Google's API reports them as "Dentist" and "Spa".
 - An autocomplete session token is reused on the Place Details call, which is how Google bills a search-then-select as one session.
 
 The browser calls `POST /api/grade` with `{ practiceName, city, practiceType, placeId, sessionToken }` and gets back a `Report`. Later stages change only what happens inside that endpoint, so the screens stay the same.

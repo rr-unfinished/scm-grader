@@ -37,7 +37,6 @@ export function sampleCategories(req: GradeRequest, ids?: CategoryId[]): { categ
   const reviews = Math.round(18 + r() * 260);
   const lcp = Math.round((1.6 + r() * 4.2) * 10) / 10;
   const rank = 1 + Math.floor(r() * 9);
-  const daysSinceReview = Math.round(4 + r() * 120);
 
   const raw: Omit<Category, "score" | "sample">[] = [
     {
@@ -69,7 +68,6 @@ export function sampleCategories(req: GradeRequest, ids?: CategoryId[]): { categ
       checks: [
         { id: "rating", title: "Google rating of 4.7 or higher", detail: "Patients filter for highly rated offices.", value: `${rating.toFixed(1)} ★`, passed: rating >= 4.7, weight: 6 },
         { id: "review-count", title: "At least 100 Google reviews", detail: "Review count is a top local ranking signal.", value: `${reviews} reviews`, passed: reviews >= 100, weight: 6 },
-        { id: "recent-review", title: "A new review in the last 30 days", detail: "Recent reviews tell Google and patients you are active.", value: `${daysSinceReview} days ago`, passed: daysSinceReview <= 30, weight: 5 },
         { id: "vs-local", title: "Rated as well as the top practices near you", detail: "Patients compare you with the offices listed beside you.", passed: p(0.4), weight: 4 },
       ],
     },
