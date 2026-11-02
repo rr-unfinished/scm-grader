@@ -1,7 +1,7 @@
 import { after, NextResponse } from "next/server";
 import { emailConfigured, sendLeadNotification, sendReportEmail } from "@/lib/email";
 import { PlacesError, placesConfigured } from "@/lib/google-places";
-import { leadsConfigured, saveLead, validateLead, type LeadInput } from "@/lib/leads";
+import { lastLeadError, leadsConfigured, saveLead, validateLead, type LeadInput } from "@/lib/leads";
 import { buildLiveReport } from "@/lib/live-report";
 import { isPracticeType, isSouthBayCity } from "@/lib/practice-types";
 import { buildSampleReport } from "@/lib/sample-report";
@@ -65,7 +65,14 @@ export async function POST(request: Request) {
   }
 
   const reportId = await recordLead({ lead, req, report, origin });
-  return NextResponse.json({ ...report, reportId, emailed: Boolean(reportId && emailConfigured()) });
+  const diagnostics = [...(report.diagnostics ?? [])];
+  if (!reportId) diagnostics.push(leadsConfigured() ? `leads: ${lastLeadError ?? "save failed"}` : "leads: not configured");
+  return NextResponse.json({
+    ...report,
+    reportId,
+    emailed: Boolean(reportId && emailConfigured()),
+    ...(diagnostics.length ? { diagnostics } : {}),
+  });
 }
 
 /** Saves the lead, then sends emails after the response so the scan isn't slower. */

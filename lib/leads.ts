@@ -29,6 +29,9 @@ const ROLES = ["Owner / doctor", "Office manager", "Marketing", "Other"];
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** Short, key-free reason the last save failed, for debugging. */
+export let lastLeadError: string | null = null;
+
 export function leadsConfigured(): boolean {
   return Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
 }
@@ -88,6 +91,7 @@ export async function saveLead(input: {
     report: input.report ? report : null,
     scan_error: input.scanError ?? null,
   };
+  lastLeadError = null;
   try {
     const res = await fetch(url("leads?select=id"), {
       method: "POST",
@@ -97,13 +101,21 @@ export async function saveLead(input: {
       cache: "no-store",
     });
     if (!res.ok) {
-      console.error(`[leads] save ${res.status}: ${(await res.text().catch(() => "")).slice(0, 300)}`);
+      const text = await res.text().catch(() => "");
+      console.error(`[leads] save ${res.status}: ${text.slice(0, 300)}`);
+      let code = "";
+      try {
+        const j = JSON.parse(text);
+        code = [j.code, j.message].filter(Boolean).join(" ").slice(0, 160);
+      } catch {}
+      lastLeadError = `${res.status} ${code}`.trim();
       return null;
     }
     const [saved] = (await res.json()) as { id: string }[];
     return saved?.id ?? null;
   } catch (e) {
     console.error("[leads] save failed:", e instanceof Error ? e.message : e);
+    lastLeadError = e instanceof Error ? e.name : "error";
     return null;
   }
 }
