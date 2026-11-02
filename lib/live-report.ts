@@ -75,8 +75,6 @@ export async function buildLiveReport(req: GradeRequest & { placeId: string }): 
     generatedAt: new Date().toISOString(),
     // Not shown in the UI; visible in the raw API response for debugging.
     ...(chatgpt === null && lastAiError ? { diagnostics: [`chatgpt: ${lastAiError}`] } : {}),
-    // TEMPORARY: lets us check name matching against real answers. Remove after review.
-    ...(chatgpt ? { diagnostics: chatgpt.excerpts.map((e) => `chatgpt answer: ${e}`) } : {}),
   };
 }
 
@@ -330,9 +328,7 @@ function aiCategory(
         detail: f.localSchema
           ? "Your site tells search and AI tools your practice details in a format they read directly."
           : `Add ${schemaType} schema so AI tools can read your hours, location and services.`,
-        value: f.localSchema
-          ? f.schemaTypes.find((x) => !["website", "webpage", "organization"].includes(x.toLowerCase()))
-          : undefined,
+        value: f.localType ?? undefined,
         passed: f.localSchema,
         weight: 6,
       },

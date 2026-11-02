@@ -138,6 +138,8 @@ export interface SiteFindings {
   insurance: boolean;
   schemaTypes: string[];
   localSchema: boolean;
+  /** The local business type found, e.g. "Dentist" */
+  localType: string | null;
   faq: boolean;
 }
 
@@ -214,12 +216,13 @@ export function analyzeHtml(html: string, practiceType: PracticeType): SiteFindi
   const microRe = /itemtype\s*=\s*["']https?:\/\/schema\.org\/([A-Za-z]+)["']/gi;
   while ((m = microRe.exec(html))) schemaTypes.push(m[1]);
   const uniqueTypes = [...new Set(schemaTypes)];
-  const localSchema = uniqueTypes.some((t) => LOCAL_SCHEMA_TYPES.has(t.toLowerCase()));
+  const localType = uniqueTypes.find((t) => LOCAL_SCHEMA_TYPES.has(t.toLowerCase())) ?? null;
+  const localSchema = localType !== null;
 
   const faq =
     uniqueTypes.some((t) => t.toLowerCase() === "faqpage") ||
     /frequently asked questions/.test(text) ||
     /\bfaqs?\b/.test(linkBlob);
 
-  return { tapToCall, booking, services, insurance, schemaTypes: uniqueTypes, localSchema, faq };
+  return { tapToCall, booking, services, insurance, schemaTypes: uniqueTypes, localSchema, localType, faq };
 }

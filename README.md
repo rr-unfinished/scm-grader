@@ -68,10 +68,11 @@ app/api/places/autocomplete/route.ts   Practice search, proxied so the key stays
 
 ## How the ChatGPT check works
 
-- The scan asks ChatGPT two questions with web search on and a location hint for the chosen city, for example "What are the best dentists in Torrance, California?" Both run in parallel with the website checks, so they don't add time.
-- The practice passes if either answer names it. Matching ignores generic words like "Dental" or "Family" and the city name, so "SmileWell Family Dentistry" matches "SmileWell", but a generic name like "Dentist of Torrance" has to appear exactly. A mention of the practice's website domain also counts.
+- The scan asks ChatGPT, with web search on and a location hint for the chosen city, for example "What are the best dentists in Torrance, California?" If the first answer doesn't name the practice, it asks a second way. This runs in parallel with the website checks, inside a 42-second budget.
+- The practice passes if either answer names it. Matching ignores generic words like "Dental" or "Family" and the city name, so "SmileWell Family Dentistry" matches "SmileWell". A generic name like "Physical Therapy San Pedro" only counts when written as a name, with the same capitals, so ordinary wording doesn't trigger it. A mention of the practice's website domain also counts.
 - AI answers vary from one run to the next, which is why it asks twice. If OpenAI can't be reached, the check is left out rather than failed.
-- Model defaults to `gpt-5.5` with low reasoning effort; set `OPENAI_MODEL` to change it.
+- Model defaults to `gpt-5-mini` with low reasoning effort, because larger models hit rate limits quickly on new OpenAI accounts. Set `OPENAI_MODEL` to change it. A rate-limited call is retried once.
+- OpenAI's API is billed separately from ChatGPT subscriptions; keep auto-recharge on so the check doesn't stop when credit runs out.
 
 ## How the website checks work
 

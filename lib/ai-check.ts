@@ -19,8 +19,6 @@ export function openaiConfigured(): boolean {
 export interface AiResult {
   asked: number;
   named: number;
-  /** First part of each answer, for checking the matching (temporary) */
-  excerpts: string[];
 }
 
 /** Short, key-free reason the last OpenAI call failed, for debugging. */
@@ -102,7 +100,6 @@ export async function chatgptMentions(opts: {
   // which keeps token use (and rate-limit pressure) low.
   let asked = 0;
   let named = 0;
-  const excerpts: string[] = [];
   const deadline = Date.now() + BUDGET_MS;
   for (const q of questions) {
     const left = deadline - Date.now();
@@ -110,13 +107,12 @@ export async function chatgptMentions(opts: {
     const a = await ask(q, opts.city, left);
     if (a === null) continue;
     asked++;
-    excerpts.push(a.replace(/\s+/g, " ").slice(0, 500));
     if (mentions(a, opts.practiceName, opts.city, opts.websiteHost)) {
       named++;
       break;
     }
   }
-  return asked === 0 ? null : { asked, named, excerpts };
+  return asked === 0 ? null : { asked, named };
 }
 
 /* ---------- Name matching (pure, testable) ---------- */
@@ -145,16 +141,24 @@ function baseName(name: string): string {
 
 export function mentions(answer: string, practiceName: string, city: string, websiteHost?: string | null): boolean {
   const text = ` ${normalize(answer)} `;
-  const base = normalize(baseName(practiceName));
-  if (base && text.includes(` ${base} `)) return true;
+  const baseRaw = baseName(practiceName).trim();
+  const base = normalize(baseRaw);
+  const cityWords = new Set(normalize(city).split(" "));
+  const distinctive = base.split(" ").filter((w) => w.length >= 3 && !GENERIC.has(w) && !cityWords.has(w));
 
   if (websiteHost) {
     const root = websiteHost.toLowerCase().replace(/^www\./, "").split(".")[0];
     if (root.length >= 5 && answer.toLowerCase().includes(root)) return true;
   }
 
-  const cityWords = new Set(normalize(city).split(" "));
-  const distinctive = base.split(" ").filter((w) => w.length >= 3 && !GENERIC.has(w) && !cityWords.has(w));
-  if (distinctive.length === 0) return false; // e.g. "Dentist of Torrance": only an exact match counts
-  return distinctive.every((w) => text.includes(` ${w} `));
+  if (distinctive.length > 0) {
+    // "SmileWell Family Dentistry" matches "SmileWell" anywhere.
+    return text.includes(` ${base} `) || distinctive.every((w) => text.includes(` ${w} `));
+  }
+
+  // Generic names like "Physical Therapy San Pedro" read like ordinary words,
+  // so they only count when written as a name: same words, same capitals.
+  const tidy = (x: string) => x.replace(/[‐-―]/g, "-").replace(/\s+/g, " ");
+  const escaped = tidy(baseRaw).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(^|[^A-Za-z0-9])${escaped}($|[^A-Za-z0-9])`).test(tidy(answer));
 }
