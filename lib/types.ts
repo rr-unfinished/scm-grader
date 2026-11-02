@@ -65,4 +65,6 @@ export interface Report {
   /** "live" when Google data was used; "sample" for the stage 1 fallback */
   source: "sample" | "live";
   generatedAt: string;
+  /** Short error codes for checks that failed to run (not shown in the UI) */
+  diagnostics?: string[];
 }

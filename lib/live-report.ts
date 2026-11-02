@@ -7,7 +7,7 @@
 import "server-only";
 import { placeDetails, searchNearby, type PlaceDetails, type SearchResult } from "./google-places";
 import { CITY_CENTERS, PRACTICE_TYPES, isSouthBayCity } from "./practice-types";
-import { chatgptMentions, openaiConfigured, type AiResult } from "./ai-check";
+import { chatgptMentions, lastAiError, openaiConfigured, type AiResult } from "./ai-check";
 import { mobileSpeed, type SpeedResult } from "./pagespeed";
 import { mergeYou, sampleCategories } from "./sample-report";
 import { analyzeHtml, fetchHomepage, type SiteFindings } from "./site-scan";
@@ -73,6 +73,8 @@ export async function buildLiveReport(req: GradeRequest & { placeId: string }): 
     searchPhrase: `${t.searchQuery} near me`,
     source: "live",
     generatedAt: new Date().toISOString(),
+    // Not shown in the UI; visible in the raw API response for debugging.
+    ...(chatgpt === null && lastAiError ? { diagnostics: [`chatgpt: ${lastAiError}`] } : {}),
   };
 }
 

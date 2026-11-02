@@ -18,6 +18,9 @@ export interface AiResult {
   named: number;
 }
 
+/** Short, key-free reason the last OpenAI call failed, for debugging. */
+export let lastAiError: string | null = null;
+
 interface ResponsesApi {
   output_text?: string;
   output?: { type: string; content?: { type?: string; text?: string }[] }[];
@@ -46,6 +49,12 @@ async function ask(question: string, city: string): Promise<string | null> {
     if (!res.ok) {
       const text = await res.text().catch(() => "");
       console.error(`[ai-check] ${res.status}: ${text.slice(0, 300)}`);
+      let code = "";
+      try {
+        const err = JSON.parse(text).error ?? {};
+        code = [err.code, err.type, err.param].filter(Boolean).join(" ");
+      } catch {}
+      lastAiError = `${res.status} ${code}`.trim();
       return null;
     }
     const data = (await res.json()) as ResponsesApi;
@@ -57,6 +66,7 @@ async function ask(question: string, city: string): Promise<string | null> {
     return parts.join("\n") || null;
   } catch (e) {
     console.error("[ai-check] failed:", e instanceof Error ? e.message : e);
+    lastAiError = e instanceof Error && e.name === "TimeoutError" ? "timeout" : "network";
     return null;
   }
 }
@@ -72,6 +82,7 @@ export async function chatgptMentions(opts: {
     `What are the best ${opts.noun}s in ${opts.city}, California? Recommend up to 8 specific practices by name.`,
     `I'm looking for a good ${opts.noun} near ${opts.city}, CA. Which practices would you recommend, and why?`,
   ];
+  lastAiError = null;
   const answers = await Promise.all(questions.map((q) => ask(q, opts.city)));
   const got = answers.filter((a): a is string => typeof a === "string");
   if (got.length === 0) return null;
