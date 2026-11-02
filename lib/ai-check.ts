@@ -6,7 +6,8 @@
 import "server-only";
 
 const BASE = process.env.OPENAI_BASE_URL || "https://api.openai.com/v1";
-const MODEL = process.env.OPENAI_MODEL || "gpt-5.5";
+// gpt-5-mini: much higher rate limits than larger models on new API accounts.
+const MODEL = process.env.OPENAI_MODEL || "gpt-5-mini";
 const TIMEOUT_MS = 45000;
 
 export function openaiConfigured(): boolean {
@@ -16,6 +17,8 @@ export function openaiConfigured(): boolean {
 export interface AiResult {
   asked: number;
   named: number;
+  /** First part of each answer, for checking the matching (temporary) */
+  excerpts: string[];
 }
 
 /** Short, key-free reason the last OpenAI call failed, for debugging. */
@@ -26,7 +29,7 @@ interface ResponsesApi {
   output?: { type: string; content?: { type?: string; text?: string }[] }[];
 }
 
-async function ask(question: string, city: string): Promise<string | null> {
+async function ask(question: string, city: string, retry = true): Promise<string | null> {
   try {
     const res = await fetch(`${BASE}/responses`, {
       method: "POST",
@@ -46,6 +49,12 @@ async function ask(question: string, city: string): Promise<string | null> {
       signal: AbortSignal.timeout(TIMEOUT_MS),
       cache: "no-store",
     });
+    if (res.status === 429 && retry) {
+      // Rate limited: wait as long as OpenAI asks (capped), then try once more.
+      const wait = Math.min(8, Number(res.headers.get("retry-after")) || 3);
+      await new Promise((r) => setTimeout(r, wait * 1000));
+      return ask(question, city, false);
+    }
     if (!res.ok) {
       const text = await res.text().catch(() => "");
       console.error(`[ai-check] ${res.status}: ${text.slice(0, 300)}`);
@@ -83,11 +92,22 @@ export async function chatgptMentions(opts: {
     `I'm looking for a good ${opts.noun} near ${opts.city}, CA. Which practices would you recommend, and why?`,
   ];
   lastAiError = null;
-  const answers = await Promise.all(questions.map((q) => ask(q, opts.city)));
-  const got = answers.filter((a): a is string => typeof a === "string");
-  if (got.length === 0) return null;
-  const named = got.filter((a) => mentions(a, opts.practiceName, opts.city, opts.websiteHost)).length;
-  return { asked: got.length, named };
+  // Ask one question at a time and stop as soon as the practice is named,
+  // which keeps token use (and rate-limit pressure) low.
+  let asked = 0;
+  let named = 0;
+  const excerpts: string[] = [];
+  for (const q of questions) {
+    const a = await ask(q, opts.city);
+    if (a === null) continue;
+    asked++;
+    excerpts.push(a.replace(/\s+/g, " ").slice(0, 500));
+    if (mentions(a, opts.practiceName, opts.city, opts.websiteHost)) {
+      named++;
+      break;
+    }
+  }
+  return asked === 0 ? null : { asked, named, excerpts };
 }
 
 /* ---------- Name matching (pure, testable) ---------- */

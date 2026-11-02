@@ -75,6 +75,8 @@ export async function buildLiveReport(req: GradeRequest & { placeId: string }): 
     generatedAt: new Date().toISOString(),
     // Not shown in the UI; visible in the raw API response for debugging.
     ...(chatgpt === null && lastAiError ? { diagnostics: [`chatgpt: ${lastAiError}`] } : {}),
+    // TEMPORARY: lets us check name matching against real answers. Remove after review.
+    ...(chatgpt ? { diagnostics: chatgpt.excerpts.map((e) => `chatgpt answer: ${e}`) } : {}),
   };
 }
 
@@ -306,7 +308,7 @@ function aiCategory(
       detail: passed
         ? `ChatGPT named you when we asked for the best ${t.noun}s in ${city}.`
         : `We asked ChatGPT for the best ${t.noun}s in ${city}, and it recommended other practices instead.`,
-      value: `Named in ${chatgpt.named} of ${chatgpt.asked}`,
+      value: passed ? "Named" : "Not named",
       passed,
       weight: 7,
     });
