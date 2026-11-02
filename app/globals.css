@@ -178,6 +178,7 @@ input:focus, select:focus { outline: 2px solid var(--teal); outline-offset: 1px;
 .cat .score small { font-size: 15px; color: var(--muted); font-weight: 600; letter-spacing: 0; }
 .cat .grade { align-self: flex-start; }
 .preview-tag { align-self: flex-start; font-size: 11px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: var(--muted); background: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; }
+.preview-tag.inline { display: inline-block; margin-left: 8px; vertical-align: 2px; background: var(--panel); }
 .sample-note { font-size: 14px; color: var(--body); background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; }
 .addr { margin-top: 8px; color: var(--on-navy); font-size: 15px; }
 .note a { color: var(--teal-ink); font-weight: 600; }

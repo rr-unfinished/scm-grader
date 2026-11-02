@@ -1,11 +1,15 @@
 /**
- * Stage 2: live Google data for the Google search and Reviews categories.
- * Website (stage 3) and AI search (stage 4) still come from sample data.
+ * Live report.
+ * Google search + Reviews: Google Places (stage 2).
+ * Website + structured data + FAQ: PageSpeed and a homepage scan (stage 3).
+ * ChatGPT and AI Overviews checks: still sample until stage 4.
  */
 import "server-only";
 import { placeDetails, searchNearby, type PlaceDetails, type SearchResult } from "./google-places";
 import { CITY_CENTERS, PRACTICE_TYPES, isSouthBayCity } from "./practice-types";
+import { mobileSpeed, type SpeedResult } from "./pagespeed";
 import { mergeYou, sampleCategories } from "./sample-report";
+import { analyzeHtml, fetchHomepage, type SiteFindings } from "./site-scan";
 import { scoreCategory, summarize } from "./scoring";
 import type { Category, Check, Competitor, GradeRequest, Report } from "./types";
 
@@ -25,10 +29,20 @@ export async function buildLiveReport(req: GradeRequest & { placeId: string }): 
   const rank = index >= 0 ? index + 1 : null;
   const others = results.filter((r) => r.id !== place.id && r.id !== req.placeId);
 
+  // Website checks run in parallel; PageSpeed is the slow one (often 15-30s).
+  const site = place.websiteUri;
+  const [speed, page] = site
+    ? await Promise.all([mobileSpeed(site), fetchHomepage(site)])
+    : [null, null];
+  const findings = page ? analyzeHtml(page.html, req.practiceType) : null;
+  const host = site ? safeHost(site) : null;
+
   const google = googleCategory(place, rank, req.city, t);
   const reviews = reviewsCategory(place, others);
-  const sample = sampleCategories({ ...req, practiceName: name }, ["web", "ai"]).categories;
-  const categories = [google, sample[0], reviews, sample[1]];
+  const web = websiteCategory(t, host, speed, findings);
+  const sampleAi = sampleCategories({ ...req, practiceName: name }, ["ai"]).categories[0];
+  const ai = aiCategory(sampleAi, host, findings, t.schemaType);
+  const categories = [google, web, reviews, ai];
   const summary = summarize(categories, req.practiceType);
 
   const competitors = mergeYou(
@@ -161,4 +175,121 @@ function reviewsCategory(place: PlaceDetails, others: SearchResult[]): Category 
     },
   ];
   return { id: "reviews", name: "Reviews & listings", checks, score: scoreCategory(checks), sample: false };
+}
+
+const safeHost = (u: string) => {
+  try {
+    return new URL(u).hostname.replace(/^www\./, "");
+  } catch {
+    return u;
+  }
+};
+
+const cantCheck = (host: string | null) =>
+  host ? `We couldn't load ${host} to check this.` : "No website is linked on your Google profile, so patients can't check this either.";
+
+function websiteCategory(
+  t: (typeof PRACTICE_TYPES)[keyof typeof PRACTICE_TYPES],
+  host: string | null,
+  speed: SpeedResult | null,
+  f: SiteFindings | null,
+): Category {
+  const checks: Check[] = [];
+
+  if (speed) {
+    checks.push({
+      id: "speed",
+      title: "Loads fast on a phone",
+      detail:
+        speed.source === "real visitors"
+          ? `Patients on phones wait about ${speed.lcpSeconds}s for your main content. Aim for under 2.5 seconds.`
+          : `In Google's mobile test, your main content took ${speed.lcpSeconds}s to appear. Aim for under 2.5 seconds.`,
+      value: `${speed.lcpSeconds}s`,
+      passed: speed.lcpSeconds <= 2.5,
+      weight: 6,
+    });
+  } else if (!host) {
+    checks.push({ id: "speed", title: "Loads fast on a phone", detail: cantCheck(null), passed: false, weight: 6 });
+  }
+  // If PageSpeed timed out on a real site, the speed check is left out rather than guessed.
+
+  const found = f?.services ?? [];
+  checks.push(
+    {
+      id: "tap-call",
+      title: "Tap-to-call button on mobile",
+      detail: f ? (f.tapToCall ? "Your phone number is tappable on mobile." : "Make your phone number a tap-to-call link. Most new-patient calls come from a phone.") : cantCheck(host),
+      passed: Boolean(f?.tapToCall),
+      weight: 5,
+    },
+    {
+      id: "booking",
+      title: "Online booking on your site",
+      detail: f ? (f.booking ? "Patients can book or request a visit online." : "Add online booking so patients can book after hours, when many of them are searching.") : cantCheck(host),
+      passed: Boolean(f?.booking),
+      weight: 5,
+    },
+    {
+      id: "service-pages",
+      title: "Pages for your main services",
+      detail: f
+        ? found.length >= 3
+          ? `Your homepage links to pages for ${listOf(found.slice(0, 4))}.`
+          : `Add separate pages for ${t.services}. Each page helps you rank for that treatment.`
+        : cantCheck(host),
+      value: f ? `${found.length} found` : undefined,
+      passed: found.length >= 3,
+      weight: 5,
+    },
+    {
+      id: "insurance",
+      title: "Insurance and pricing info",
+      detail: f
+        ? f.insurance
+          ? "Your homepage mentions insurance, financing or pricing."
+          : 'Add an "insurance we accept" section. It answers the first question patients ask.'
+        : cantCheck(host),
+      passed: Boolean(f?.insurance),
+      weight: 4,
+    },
+  );
+  return { id: "web", name: "Website", checks, score: scoreCategory(checks), sample: false };
+}
+
+function aiCategory(sample: Category, host: string | null, f: SiteFindings | null, schemaType: string): Category {
+  const kept = sample.checks
+    .filter((c) => c.id === "chatgpt" || c.id === "ai-overviews")
+    .map((c) => ({ ...c, sample: true }));
+  const checks: Check[] = [
+    ...kept,
+    {
+      id: "schema",
+      title: "Structured data for your practice",
+      detail: f
+        ? f.localSchema
+          ? "Your site tells search and AI tools your practice details in a format they read directly."
+          : `Add ${schemaType} schema so AI tools can read your hours, location and services.`
+        : cantCheck(host),
+      value: f?.localSchema ? f.schemaTypes.find((x) => x.toLowerCase() !== "website" && x.toLowerCase() !== "webpage") : undefined,
+      passed: Boolean(f?.localSchema),
+      weight: 6,
+    },
+    {
+      id: "faq",
+      title: "Answers to common patient questions",
+      detail: f
+        ? f.faq
+          ? "Your site has FAQ content that AI assistants can quote."
+          : "Add an FAQ section. It's what AI assistants quote back to patients."
+        : cantCheck(host),
+      passed: Boolean(f?.faq),
+      weight: 6,
+    },
+  ];
+  return { id: "ai", name: "AI search", checks, score: scoreCategory(checks), sample: checks.every((c) => c.sample) };
+}
+
+function listOf(items: string[]): string {
+  if (items.length <= 1) return items.join("");
+  return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
 }

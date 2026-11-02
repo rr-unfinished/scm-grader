@@ -6,7 +6,8 @@ import { buildSampleReport } from "@/lib/sample-report";
 import type { GradeRequest } from "@/lib/types";
 
 export const runtime = "nodejs";
-export const maxDuration = 30;
+// PageSpeed can take 15-30 seconds; leave headroom.
+export const maxDuration = 60;
 
 const PLACE_ID = /^[A-Za-z0-9_-]{10,300}$/;
 const TOKEN = /^[A-Za-z0-9_-]{8,100}$/;

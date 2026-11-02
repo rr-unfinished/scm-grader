@@ -21,6 +21,8 @@ export interface Check {
   passed: boolean;
   /** Points this check is worth inside its category */
   weight: number;
+  /** True while this one check still uses sample data */
+  sample?: boolean;
 }
 
 export interface Category {
@@ -29,7 +31,7 @@ export interface Category {
   /** Score out of 25 */
   score: number;
   checks: Check[];
-  /** True while this category still runs on sample data */
+  /** True while every check in this category still uses sample data */
   sample: boolean;
 }
 

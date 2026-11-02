@@ -75,10 +75,13 @@ export default function ReportView({
                 {c.score}/25 · {toFix} to fix
               </span>
             </div>
-            {c.sample && report.source === "live" && (
+            {report.source === "live" && c.sample && (
               <p className="sample-note">
                 Preview: these results are examples for now. Live {c.name} checks are coming in the next update.
               </p>
+            )}
+            {report.source === "live" && !c.sample && c.checks.some((x) => x.sample) && (
+              <p className="sample-note">Checks marked Preview are examples for now. Live versions are coming in the next update.</p>
             )}
             <ul className="checks">
               {sorted.map((x) => (
@@ -87,7 +90,10 @@ export default function ReportView({
                     {x.passed ? <CheckIcon size={14} width={3} /> : <CrossIcon />}
                   </span>
                   <div>
-                    <div className="t">{x.title}</div>
+                    <div className="t">
+                      {x.title}
+                      {x.sample && !c.sample && report.source === "live" && <span className="preview-tag inline">Preview</span>}
+                    </div>
                     <div className="d">{x.detail}</div>
                   </div>
                   {x.value && <span className="v">{x.value}</span>}

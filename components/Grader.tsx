@@ -369,10 +369,10 @@ function ScanView(props: {
   const items = [
     `Finding ${props.practiceName} on Google Maps`,
     "Checking your Google Business Profile",
-    "Loading your website on a phone",
     "Reading your reviews",
     `Comparing nearby ${t.plural}`,
-    `Asking AI assistants about ${props.city} ${t.noun}s`,
+    "Checking what AI assistants can read on your site",
+    "Loading your website on a phone",
   ];
   const [progress, setProgress] = useState(0);
   const result = useRef<Report | null>(null);
@@ -449,7 +449,7 @@ function ScanView(props: {
   return (
     <section className="view scan" aria-live="polite">
       <h2>Scanning {props.practiceName}</h2>
-      <p className="note">This takes a few seconds.</p>
+      <p className="note">This can take up to 30 seconds while we load your site the way a patient would.</p>
       <ul>
         {items.map((label, i) => (
           <li key={label} className={i < progress ? "done" : i === progress ? "active" : ""}>
