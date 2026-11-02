@@ -312,7 +312,9 @@ function aiCategory(sample: Category, host: string | null, f: SiteFindings | nul
       },
     );
   }
-  return { id: "ai", name: "AI search", checks, score: scoreCategory(checks), sample: checks.every((c) => c.sample), note };
+  const allSample = checks.every((c) => c.sample);
+  // Sample checks don't count, so a category with only sample checks is left out of the total.
+  return { id: "ai", name: "AI search", checks, score: scoreCategory(checks), sample: allSample, note, skipped: allSample };
 }
 
 function listOf(items: string[]): string {

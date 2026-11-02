@@ -75,7 +75,7 @@ export default function ReportView({
       </div>
 
       {report.categories.map((c) => {
-        const toFix = c.checks.filter((x) => !x.passed).length;
+        const toFix = c.checks.filter((x) => !x.passed && !x.sample).length;
         const sorted = [...c.checks].sort((a, b) => Number(a.passed) - Number(b.passed));
         return (
           <div className="catblock" id={`cat-${c.id}`} key={c.id}>
@@ -86,11 +86,13 @@ export default function ReportView({
             {c.note && <p className="sample-note">{c.note}</p>}
             {report.source === "live" && c.sample && (
               <p className="sample-note">
-                Preview: these results are examples for now. Live {c.name} checks are coming in the next update.
+                Preview: these results are examples and don&apos;t count toward your score yet. Live {c.name} checks are coming in the next update.
               </p>
             )}
             {report.source === "live" && !c.sample && c.checks.some((x) => x.sample) && (
-              <p className="sample-note">Checks marked Preview are examples for now. Live versions are coming in the next update.</p>
+              <p className="sample-note">
+                Checks marked Preview are examples and don&apos;t count toward your score yet. Live versions are coming in the next update.
+              </p>
             )}
             {c.checks.length > 0 && (
             <ul className="checks">
