@@ -4,13 +4,15 @@ A free online health score for South Bay dental and medical practices. A practic
 
 ## Status
 
-**Stage 1: complete.** The full flow works end to end on sample data. Scores are generated from the practice name, so the same name always gets the same report.
+**Stage 2: complete.** Practice search, map rank, Google profile checks, reviews and competitors use live Google data. Website and AI search are still sample results, labeled "Preview" in the report, until stages 3 and 4.
+
+Without `GOOGLE_PLACES_API_KEY` the app falls back to sample data for everything, so it still runs locally with no keys.
 
 | Stage | What it adds | Status |
 | --- | --- | --- |
 | 1 | App, screens, sample data, `/api/grade` endpoint | Done |
-| 2 | Live Google data: Places autocomplete, map rank, rating, reviews, competitors | Next |
-| 3 | PageSpeed mobile speed and website checks (tap-to-call, booking, schema) | |
+| 2 | Live Google data: Places autocomplete, map rank, rating, reviews, competitors | Done |
+| 3 | PageSpeed mobile speed and website checks (tap-to-call, booking, schema) | Next |
 | 4 | AI search check (ChatGPT / Perplexity) | |
 | 5 | Save leads (Supabase), email the report (Resend), notify South Coast | |
 | 6 | Bot protection (Turnstile), caching, privacy page | |
@@ -32,7 +34,7 @@ Then open http://localhost:3000.
 2. Leave the defaults (framework: Next.js) and click **Deploy**.
 3. Later, add a custom domain such as `grader.southcoastmarketing.com` under **Settings → Domains**.
 
-Stage 1 needs no API keys. Keys for later stages go in **Settings → Environment Variables**, never in the code. See `.env.example` for the list.
+API keys go in **Settings → Environment Variables**, never in the code. See `.env.example` for the list. After adding or changing a key, redeploy so it takes effect.
 
 ## How it's built
 
@@ -47,7 +49,17 @@ lib/
   types.ts              Report, Category, Check shapes
   practice-types.ts     Practice types, patient values, South Bay cities
   scoring.ts            Category scores, totals, revenue estimate
-  sample-report.ts      Stage 1 sample data (replaced in stage 2)
+  google-places.ts      Server-only Google Places API (New) client
+  live-report.ts        Builds the report from live Google data
+  sample-report.ts      Sample data (Website and AI until stages 3 and 4)
+app/api/places/autocomplete/route.ts   Practice search, proxied so the key stays on the server
 ```
 
-The browser calls `POST /api/grade` with `{ practiceName, city, practiceType }` and gets back a `Report`. Stage 2 changes only what happens inside that endpoint, so the screens stay the same.
+## How the Google checks work
+
+- **Practice search** uses Places Autocomplete, limited to the South Bay. Picking a result gives the exact Google listing, so the scan never guesses which practice was meant.
+- **Map rank** runs a Text Search for the practice type (for example "dentist") centered on the chosen city, then finds the practice's position in the top 20. Real rank shifts with where a patient searches, and the report says so.
+- **Profile and review checks** come from Place Details: category, website, phone, hours, photos, rating, review count and newest review. Google returns at most 10 photos and 5 reviews per place, so those checks use thresholds that fit.
+- An autocomplete session token is reused on the Place Details call, which is how Google bills a search-then-select as one session.
+
+The browser calls `POST /api/grade` with `{ practiceName, city, practiceType, placeId, sessionToken }` and gets back a `Report`. Later stages change only what happens inside that endpoint, so the screens stay the same.

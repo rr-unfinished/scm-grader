@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { PRACTICE_TYPES, SOUTH_BAY_CITIES } from "@/lib/practice-types";
+import { PRACTICE_TYPES, SOUTH_BAY_CITIES, cityFromAddress } from "@/lib/practice-types";
 import type { PracticeType, Report } from "@/lib/types";
 import { CheckIcon, SparkleIcon } from "./icons";
+import PracticeSearch, { type PickedPlace } from "./PracticeSearch";
 import ReportView from "./ReportView";
 import ScoreRing from "./ScoreRing";
 
@@ -20,6 +21,14 @@ export interface Lead {
 const EMPTY_LEAD: Lead = { firstName: "", lastName: "", role: "", email: "", phone: "" };
 const ROLES = ["Owner / doctor", "Office manager", "Marketing", "Other"];
 
+function newToken() {
+  try {
+    return crypto.randomUUID();
+  } catch {
+    return `t${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`;
+  }
+}
+
 export default function Grader() {
   const [view, setView] = useState<View>("start");
   const [practiceName, setPracticeName] = useState("");
@@ -29,6 +38,12 @@ export default function Grader() {
   const [step, setStep] = useState(1);
   const [error, setError] = useState("");
   const [report, setReport] = useState<Report | null>(null);
+  const [picked, setPicked] = useState<PickedPlace | null>(null);
+  const [sessionToken, setSessionToken] = useState("");
+  const [configured, setConfigured] = useState(true);
+
+  // Created on the client only, so server and browser renders match.
+  useEffect(() => setSessionToken(newToken()), []);
 
   const go = (v: View) => {
     setView(v);
@@ -40,6 +55,9 @@ export default function Grader() {
     setPracticeType("");
     setStep(1);
     setReport(null);
+    setPicked(null);
+    setPracticeName("");
+    setSessionToken(newToken());
     go("start");
   };
 
@@ -47,12 +65,27 @@ export default function Grader() {
     return (
       <StartView
         practiceName={practiceName}
+        picked={picked}
+        sessionToken={sessionToken}
         city={city}
         error={error}
-        onName={setPracticeName}
+        onName={(v) => {
+          setPracticeName(v);
+          setError("");
+        }}
+        onPick={(p) => {
+          setPicked(p);
+          setPracticeName(p.name);
+          setError("");
+          const c = cityFromAddress(p.detail);
+          if (c) setCity(c);
+        }}
+        onConfigured={setConfigured}
         onCity={setCity}
         onSubmit={() => {
           if (!practiceName.trim()) return setError("Enter your practice name to start.");
+          if (configured && !(picked && picked.name === practiceName))
+            return setError("Pick your practice from the list so we scan the right Google listing.");
           setStep(1);
           go("quiz");
         }}
@@ -104,13 +137,24 @@ export default function Grader() {
         practiceName={practiceName.trim()}
         city={city}
         practiceType={practiceType}
+        placeId={picked && picked.name === practiceName ? picked.placeId : undefined}
+        sessionToken={sessionToken}
         onDone={(r) => {
           setReport(r);
+          // A session token covers one autocomplete + details pair.
+          setSessionToken(newToken());
           go("report");
         }}
-        onError={(msg) => {
-          setStep(3);
-          setView("quiz");
+        onError={(msg, badListing) => {
+          // A listing problem sends them back to search; anything else lets them retry.
+          if (badListing) {
+            setPicked(null);
+            setSessionToken(newToken());
+            setView("start");
+          } else {
+            setStep(3);
+            setView("quiz");
+          }
           setError(msg);
         }}
       />
@@ -128,9 +172,13 @@ export default function Grader() {
 
 function StartView(props: {
   practiceName: string;
+  picked: PickedPlace | null;
+  sessionToken: string;
   city: string;
   error: string;
   onName: (v: string) => void;
+  onPick: (p: PickedPlace) => void;
+  onConfigured: (c: boolean) => void;
   onCity: (v: string) => void;
   onSubmit: () => void;
 }) {
@@ -153,16 +201,17 @@ function StartView(props: {
             }}
           >
             <div className="row2">
-              <label htmlFor="in-name">
-                Practice name
-                <input
-                  id="in-name"
-                  autoComplete="organization"
-                  placeholder="e.g. Pacific Smiles Dental"
+              <div className="field">
+                <label htmlFor="in-name">Practice name</label>
+                <PracticeSearch
                   value={props.practiceName}
-                  onChange={(e) => props.onName(e.target.value)}
+                  picked={props.picked}
+                  sessionToken={props.sessionToken}
+                  onType={props.onName}
+                  onPick={props.onPick}
+                  onConfigured={props.onConfigured}
                 />
-              </label>
+              </div>
               <label htmlFor="in-city">
                 City
                 <select id="in-city" value={props.city} onChange={(e) => props.onCity(e.target.value)}>
@@ -311,8 +360,10 @@ function ScanView(props: {
   practiceName: string;
   city: string;
   practiceType: PracticeType;
+  placeId?: string;
+  sessionToken: string;
   onDone: (r: Report) => void;
-  onError: (msg: string) => void;
+  onError: (msg: string, badListing: boolean) => void;
 }) {
   const t = PRACTICE_TYPES[props.practiceType];
   const items = [
@@ -325,7 +376,7 @@ function ScanView(props: {
   ];
   const [progress, setProgress] = useState(0);
   const result = useRef<Report | null>(null);
-  const failed = useRef<string | null>(null);
+  const failed = useRef<{ msg: string; badListing: boolean } | null>(null);
   const finished = useRef(false);
   const step = useRef(0);
 
@@ -335,16 +386,29 @@ function ScanView(props: {
     fetch("/api/grade", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ practiceName: props.practiceName, city: props.city, practiceType: props.practiceType }),
+      body: JSON.stringify({
+        practiceName: props.practiceName,
+        city: props.city,
+        practiceType: props.practiceType,
+        placeId: props.placeId,
+        sessionToken: props.sessionToken,
+      }),
       signal: ctrl.signal,
     })
       .then(async (res) => {
         const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error || "We couldn't finish the scan. Try again in a minute.");
+        if (!res.ok) {
+          failed.current = {
+            msg: data.error || "We couldn't finish the scan. Try again in a minute.",
+            badListing: res.status === 400,
+          };
+          return;
+        }
         result.current = data as Report;
       })
       .catch((e: Error) => {
-        if (e.name !== "AbortError") failed.current = e.message || "We couldn't finish the scan. Try again in a minute.";
+        if (e.name !== "AbortError")
+          failed.current = { msg: "We couldn't finish the scan. Check your connection and try again.", badListing: false };
       });
     return () => ctrl.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -359,7 +423,7 @@ function ScanView(props: {
       if (failed.current) {
         finished.current = true;
         window.clearInterval(timer);
-        props.onError(failed.current);
+        props.onError(failed.current.msg, failed.current.badListing);
         return;
       }
       if (step.current < items.length - 1) {

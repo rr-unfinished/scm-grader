@@ -1,11 +1,10 @@
 /**
- * Stage 1: sample data only.
- * Stage 2 replaces this with live Google Places, PageSpeed and site checks.
- * The output shape (Report) stays the same, so the UI does not change.
+ * Sample data. Used for the whole report when Google isn't configured or no
+ * place was picked, and for the Website and AI categories until stages 3 and 4.
  */
 import { PRACTICE_TYPES } from "./practice-types";
 import { scoreCategory, summarize } from "./scoring";
-import type { Category, Competitor, GradeRequest, Report } from "./types";
+import type { Category, CategoryId, Competitor, GradeRequest, Report } from "./types";
 
 /** Seeded random so the same practice always gets the same sample report. */
 function seeded(str: string) {
@@ -23,7 +22,13 @@ function seeded(str: string) {
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-export function buildSampleReport(req: GradeRequest): Report {
+interface SampleExtras {
+  rating: number;
+  reviews: number;
+  rank: number;
+}
+
+export function sampleCategories(req: GradeRequest, ids?: CategoryId[]): { categories: Category[]; extras: SampleExtras } {
   const t = PRACTICE_TYPES[req.practiceType];
   const r = seeded(`${req.practiceName.toLowerCase()}|${req.city}|${req.practiceType}`);
   const p = (x: number) => r() < x;
@@ -33,19 +38,18 @@ export function buildSampleReport(req: GradeRequest): Report {
   const lcp = Math.round((1.6 + r() * 4.2) * 10) / 10;
   const rank = 1 + Math.floor(r() * 9);
   const daysSinceReview = Math.round(4 + r() * 120);
-  const searchPhrase = `${t.noun} near me`;
 
-  const raw: Omit<Category, "score">[] = [
+  const raw: Omit<Category, "score" | "sample">[] = [
     {
       id: "google",
       name: "Google search",
       checks: [
-        { id: "map-rank", title: "Shows in the top 3 map results", detail: `For "${searchPhrase}" searched from ${req.city}.`, value: `Rank #${rank}`, passed: rank <= 3, weight: 6 },
-        { id: "gbp-verified", title: "Google Business Profile is verified", detail: "Unverified profiles can be edited by anyone and rank lower.", passed: p(0.8), weight: 5 },
+        { id: "map-rank", title: "Shows in the top 3 map results", detail: `For "${t.noun} near me" searched from ${req.city}.`, value: `Rank #${rank}`, passed: rank <= 3, weight: 6 },
         { id: "gbp-category", title: "Primary category matches what you do", detail: `Your main category should read "${cap(t.noun)}".`, passed: p(0.65), weight: 4 },
-        { id: "gbp-booking", title: "Booking link on your profile", detail: "Patients can request an appointment straight from Google.", passed: p(0.45), weight: 4 },
-        { id: "gbp-hours", title: "Holiday and weekend hours are set", detail: "Wrong hours are one of the top reasons people pick another office.", passed: p(0.55), weight: 3 },
-        { id: "gbp-photos", title: "New photos in the last 90 days", detail: "Fresh office and team photos lift profile clicks.", passed: p(0.4), weight: 3 },
+        { id: "gbp-website", title: "Website linked on your profile", detail: "Patients tap through to your site from Google.", passed: p(0.85), weight: 4 },
+        { id: "gbp-phone", title: "Phone number on your profile", detail: "Lets patients call straight from the search results.", passed: p(0.9), weight: 3 },
+        { id: "gbp-hours", title: "Business hours are listed", detail: "Missing hours are one of the top reasons people pick another office.", passed: p(0.8), weight: 3 },
+        { id: "gbp-photos", title: "At least 10 photos on your profile", detail: "Office and team photos lift profile clicks.", passed: p(0.5), weight: 3 },
       ],
     },
     {
@@ -66,8 +70,7 @@ export function buildSampleReport(req: GradeRequest): Report {
         { id: "rating", title: "Google rating of 4.7 or higher", detail: "Patients filter for highly rated offices.", value: `${rating.toFixed(1)} ★`, passed: rating >= 4.7, weight: 6 },
         { id: "review-count", title: "At least 100 Google reviews", detail: "Review count is a top local ranking signal.", value: `${reviews} reviews`, passed: reviews >= 100, weight: 6 },
         { id: "recent-review", title: "A new review in the last 30 days", detail: "Recent reviews tell Google and patients you are active.", value: `${daysSinceReview} days ago`, passed: daysSinceReview <= 30, weight: 5 },
-        { id: "review-replies", title: "You reply to reviews", detail: "Replying to good and bad reviews builds trust.", passed: p(0.45), weight: 4 },
-        { id: "nap", title: "Name, address and phone match everywhere", detail: "Checked against Yelp, Healthgrades, Apple Maps and Bing.", passed: p(0.4), weight: 4 },
+        { id: "vs-local", title: "Rated as well as the top practices near you", detail: "Patients compare you with the offices listed beside you.", passed: p(0.4), weight: 4 },
       ],
     },
     {
@@ -82,30 +85,23 @@ export function buildSampleReport(req: GradeRequest): Report {
     },
   ];
 
-  const categories: Category[] = raw.map((c) => ({ ...c, score: scoreCategory(c.checks) }));
+  const categories = raw
+    .filter((c) => !ids || ids.includes(c.id))
+    .map((c) => ({ ...c, score: scoreCategory(c.checks), sample: true }));
+  return { categories, extras: { rating, reviews, rank } };
+}
+
+export function buildSampleReport(req: GradeRequest): Report {
+  const t = PRACTICE_TYPES[req.practiceType];
+  const { categories, extras } = sampleCategories(req);
   const summary = summarize(categories, req.practiceType);
 
-  // Sample competitors, always ahead of or near the practice.
   const prefixes = ["Coastline", "Bayside", "Harbor", "Seaside", "Sunset", "Peninsula", "Shoreline", "Breakwater"];
-  const used = new Set<string>();
-  const others: Omit<Competitor, "rank">[] = [];
-  while (others.length < 3) {
-    const n = prefixes[Math.floor(r() * prefixes.length)];
-    if (used.has(n)) continue;
-    used.add(n);
-    others.push({
-      name: `${n} ${t.competitorSuffix}`,
-      rating: Math.round((4.6 + r() * 0.4) * 10) / 10,
-      reviews: Math.round(140 + r() * 520),
-      score: Math.min(96, summary.total + 8 + Math.round(r() * 24)),
-    });
-  }
-  const competitors: Competitor[] = [
-    ...others,
-    { name: req.practiceName, rating, reviews, score: summary.total, isYou: true },
-  ]
-    .sort((a, b) => b.score - a.score)
-    .map((c, i) => ({ ...c, rank: i + 1 }));
+  const others: Competitor[] = prefixes
+    .slice(0, 4)
+    .map((n, i) => ({ rank: i + 1, name: `${n} ${t.competitorSuffix}`, rating: 4.9 - i * 0.1, reviews: 480 - i * 90 }));
+  const you: Competitor = { rank: extras.rank, name: req.practiceName, rating: extras.rating, reviews: extras.reviews, isYou: true };
+  const competitors = mergeYou(others, you);
 
   return {
     practiceName: req.practiceName,
@@ -114,8 +110,15 @@ export function buildSampleReport(req: GradeRequest): Report {
     ...summary,
     categories,
     competitors,
-    searchPhrase,
+    searchPhrase: `${t.noun} near me`,
     source: "sample",
     generatedAt: new Date().toISOString(),
   };
+}
+
+/** Top 3 others plus you, in rank order; you last when outside the list. */
+export function mergeYou(others: Competitor[], you: Competitor): Competitor[] {
+  const top = others.filter((c) => c.rank !== you.rank).slice(0, 3);
+  const all = [...top, you];
+  return all.sort((a, b) => (a.rank ?? 999) - (b.rank ?? 999));
 }

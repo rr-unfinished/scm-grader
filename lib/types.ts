@@ -6,6 +6,10 @@ export interface GradeRequest {
   practiceName: string;
   city: string;
   practiceType: PracticeType;
+  /** Google place ID from autocomplete. Without it the report uses sample data. */
+  placeId?: string;
+  /** Autocomplete session token, reused on Place Details for Google billing */
+  sessionToken?: string;
 }
 
 export interface Check {
@@ -25,19 +29,23 @@ export interface Category {
   /** Score out of 25 */
   score: number;
   checks: Check[];
+  /** True while this category still runs on sample data */
+  sample: boolean;
 }
 
 export interface Competitor {
-  rank: number;
+  /** Position in the local Google results; null when outside the top 20 */
+  rank: number | null;
   name: string;
-  rating: number;
-  reviews: number;
-  score: number;
+  rating?: number;
+  reviews?: number;
   isYou?: boolean;
 }
 
 export interface Report {
   practiceName: string;
+  address?: string;
+  mapsUri?: string;
   city: string;
   practiceType: PracticeType;
   /** Score out of 100 */
@@ -48,7 +56,7 @@ export interface Report {
   categories: Category[];
   competitors: Competitor[];
   searchPhrase: string;
-  /** "sample" until stage 2 wires in live Google data */
+  /** "live" when Google data was used; "sample" for the stage 1 fallback */
   source: "sample" | "live";
   generatedAt: string;
 }
