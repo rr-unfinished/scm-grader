@@ -4,7 +4,7 @@ A free online health score for South Bay dental and medical practices. A practic
 
 ## Status
 
-**Stage 3: complete.** Everything is live except two AI search checks (ChatGPT and Google AI Overviews), which are labeled "Preview" in the report until stage 4.
+**Stage 4: complete.** Every check in a live report uses real data. Google AI Overviews is not checked, because Google offers no API for it; adding it would need a paid search-results tool such as SerpApi or DataForSEO.
 
 Without `GOOGLE_PLACES_API_KEY` the app falls back to sample data for everything, so it still runs locally with no keys.
 
@@ -13,8 +13,8 @@ Without `GOOGLE_PLACES_API_KEY` the app falls back to sample data for everything
 | 1 | App, screens, sample data, `/api/grade` endpoint | Done |
 | 2 | Live Google data: Places autocomplete, map rank, rating, reviews, competitors | Done |
 | 3 | PageSpeed mobile speed and website checks (tap-to-call, booking, schema) | Done |
-| 4 | AI search check (ChatGPT / Perplexity) | Next |
-| 5 | Save leads (Supabase), email the report (Resend), notify South Coast | |
+| 4 | ChatGPT recommendation check | Done |
+| 5 | Save leads (Supabase), email the report (Resend), notify South Coast | Next |
 | 6 | Bot protection (Turnstile), caching, privacy page | |
 
 ## Run it locally
@@ -53,7 +53,8 @@ lib/
   live-report.ts        Builds the report from live Google data
   pagespeed.ts          Mobile load time from PageSpeed Insights
   site-scan.ts          Safe homepage fetch + website/AI-readiness analysis
-  sample-report.ts      Sample data (ChatGPT and AI Overviews checks until stage 4)
+  ai-check.ts           Asks ChatGPT for local recommendations and checks for the practice
+  sample-report.ts      Sample data, used only when no Google key is set
 app/api/places/autocomplete/route.ts   Practice search, proxied so the key stays on the server
 ```
 
@@ -64,6 +65,13 @@ app/api/places/autocomplete/route.ts   Practice search, proxied so the key stays
 - **Profile and review checks** come from Place Details: category, website, phone, hours, photos, rating and review count. Google returns at most 10 photos per place, so the photo check uses a 10-photo threshold.
 - An autocomplete session token is reused on the Place Details call, which is how Google bills a search-then-select as one session.
 - **Not checked:** review recency. Google's API returns only 5 "most relevant" reviews, not the newest, so it can't tell when the last review came in. Orthodontists and med spas are graded leniently on category, because Google's API reports them as "Dentist" and "Spa".
+
+## How the ChatGPT check works
+
+- The scan asks ChatGPT two questions with web search on and a location hint for the chosen city, for example "What are the best dentists in Torrance, California?" Both run in parallel with the website checks, so they don't add time.
+- The practice passes if either answer names it. Matching ignores generic words like "Dental" or "Family" and the city name, so "SmileWell Family Dentistry" matches "SmileWell", but a generic name like "Dentist of Torrance" has to appear exactly. A mention of the practice's website domain also counts.
+- AI answers vary from one run to the next, which is why it asks twice. If OpenAI can't be reached, the check is left out rather than failed.
+- Model defaults to `gpt-5.5` with low reasoning effort; set `OPENAI_MODEL` to change it.
 
 ## How the website checks work
 

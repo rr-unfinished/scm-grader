@@ -2,11 +2,12 @@
  * Live report.
  * Google search + Reviews: Google Places (stage 2).
  * Website + structured data + FAQ: PageSpeed and a homepage scan (stage 3).
- * ChatGPT and AI Overviews checks: still sample until stage 4.
+ * ChatGPT recommendation: OpenAI Responses API with web search (stage 4).
  */
 import "server-only";
 import { placeDetails, searchNearby, type PlaceDetails, type SearchResult } from "./google-places";
 import { CITY_CENTERS, PRACTICE_TYPES, isSouthBayCity } from "./practice-types";
+import { chatgptMentions, openaiConfigured, type AiResult } from "./ai-check";
 import { mobileSpeed, type SpeedResult } from "./pagespeed";
 import { mergeYou, sampleCategories } from "./sample-report";
 import { analyzeHtml, fetchHomepage, type SiteFindings } from "./site-scan";
@@ -31,17 +32,22 @@ export async function buildLiveReport(req: GradeRequest & { placeId: string }): 
 
   // Website checks run in parallel; PageSpeed is the slow one (often 15-30s).
   const site = place.websiteUri;
-  const [speed, page] = site
-    ? await Promise.all([mobileSpeed(site), fetchHomepage(site)])
-    : [null, null];
-  const findings = page ? analyzeHtml(page.html, req.practiceType) : null;
+  // Website and ChatGPT checks all run in parallel; PageSpeed is usually the slowest.
   const host = site ? safeHost(site) : null;
+  const [speed, page, chatgpt] = await Promise.all([
+    site ? mobileSpeed(site) : Promise.resolve(null),
+    site ? fetchHomepage(site) : Promise.resolve(null),
+    openaiConfigured()
+      ? chatgptMentions({ practiceName: name, noun: t.noun, city: req.city, websiteHost: host })
+      : Promise.resolve(undefined),
+  ]);
+  const findings = page ? analyzeHtml(page.html, req.practiceType) : null;
 
   const google = googleCategory(place, rank, req.city, t);
   const reviews = reviewsCategory(place, others);
   const web = websiteCategory(t, host, speed, findings);
   const sampleAi = sampleCategories({ ...req, practiceName: name }, ["ai"]).categories[0];
-  const ai = aiCategory(sampleAi, host, findings, t.schemaType);
+  const ai = aiCategory(sampleAi, host, findings, t, req.city, chatgpt);
   const categories = [google, web, reviews, ai];
   const summary = summarize(categories, req.practiceType);
 
@@ -275,12 +281,35 @@ function websiteCategory(
   };
 }
 
-function aiCategory(sample: Category, host: string | null, f: SiteFindings | null, schemaType: string): Category {
-  const kept = sample.checks
-    .filter((c) => c.id === "chatgpt" || c.id === "ai-overviews")
-    .map((c) => ({ ...c, sample: true }));
-  const checks: Check[] = [...kept];
+function aiCategory(
+  sample: Category,
+  host: string | null,
+  f: SiteFindings | null,
+  t: (typeof PRACTICE_TYPES)[keyof typeof PRACTICE_TYPES],
+  city: string,
+  chatgpt: AiResult | null | undefined,
+): Category {
+  const schemaType = t.schemaType;
+  const checks: Check[] = [];
   let note: string | undefined;
+
+  // undefined = OpenAI not configured (show sample, unscored); null = it failed (leave the check out).
+  if (chatgpt === undefined) {
+    checks.push(...sample.checks.filter((c) => c.id === "chatgpt").map((c) => ({ ...c, sample: true })));
+  } else if (chatgpt) {
+    const passed = chatgpt.named > 0;
+    checks.push({
+      id: "chatgpt",
+      title: "Recommended by ChatGPT",
+      detail: passed
+        ? `ChatGPT named you when we asked for the best ${t.noun}s in ${city}.`
+        : `We asked ChatGPT for the best ${t.noun}s in ${city}, and it recommended other practices instead.`,
+      value: `Named in ${chatgpt.named} of ${chatgpt.asked}`,
+      passed,
+      weight: 7,
+    });
+  }
+  // Google AI Overviews has no API; checking it needs a paid search-results tool, so it's left out.
 
   if (!host) {
     checks.push(

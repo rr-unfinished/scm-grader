@@ -371,7 +371,7 @@ function ScanView(props: {
     "Checking your Google Business Profile",
     "Reading your reviews",
     `Comparing nearby ${t.plural}`,
-    "Checking what AI assistants can read on your site",
+    `Asking ChatGPT about ${props.city} ${t.noun}s`,
     "Loading your website on a phone",
   ];
   const [progress, setProgress] = useState(0);
