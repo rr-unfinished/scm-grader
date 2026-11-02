@@ -51,14 +51,24 @@ export default function ReportView({
             >
               <span className="name">{c.name}</span>
               {c.sample && <span className="preview-tag">Preview</span>}
-              <span className="score">
-                {c.score}
-                <small>/25</small>
-              </span>
-              <span className="meter">
-                <i className={`m-${g}`} style={{ width: `${(c.score / 25) * 100}%` }} />
-              </span>
-              <span className={`grade g-${g}`}>{GRADE_LABEL[g]}</span>
+              {c.skipped ? (
+                <>
+                  <span className="score skipped">Not checked</span>
+                  <span className="meter" />
+                  <span className="grade g-skipped">Left out of score</span>
+                </>
+              ) : (
+                <>
+                  <span className="score">
+                    {c.score}
+                    <small>/25</small>
+                  </span>
+                  <span className="meter">
+                    <i className={`m-${g}`} style={{ width: `${(c.score / 25) * 100}%` }} />
+                  </span>
+                  <span className={`grade g-${g}`}>{GRADE_LABEL[g]}</span>
+                </>
+              )}
             </button>
           );
         })}
@@ -71,10 +81,9 @@ export default function ReportView({
           <div className="catblock" id={`cat-${c.id}`} key={c.id}>
             <div className="section-h">
               <h3>{c.name}</h3>
-              <span>
-                {c.score}/25 · {toFix} to fix
-              </span>
+              <span>{c.skipped ? "Not checked" : `${c.score}/25 · ${toFix} to fix`}</span>
             </div>
+            {c.note && <p className="sample-note">{c.note}</p>}
             {report.source === "live" && c.sample && (
               <p className="sample-note">
                 Preview: these results are examples for now. Live {c.name} checks are coming in the next update.
@@ -83,6 +92,7 @@ export default function ReportView({
             {report.source === "live" && !c.sample && c.checks.some((x) => x.sample) && (
               <p className="sample-note">Checks marked Preview are examples for now. Live versions are coming in the next update.</p>
             )}
+            {c.checks.length > 0 && (
             <ul className="checks">
               {sorted.map((x) => (
                 <li key={x.id}>
@@ -100,6 +110,7 @@ export default function ReportView({
                 </li>
               ))}
             </ul>
+            )}
           </div>
         );
       })}

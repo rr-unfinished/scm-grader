@@ -33,6 +33,10 @@ export interface Category {
   checks: Check[];
   /** True while every check in this category still uses sample data */
   sample: boolean;
+  /** Shown above the checks, e.g. why some checks were skipped */
+  note?: string;
+  /** Nothing in this category could be measured; it's left out of the total */
+  skipped?: boolean;
 }
 
 export interface Competitor {

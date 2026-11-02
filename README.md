@@ -62,6 +62,7 @@ app/api/places/autocomplete/route.ts   Practice search, proxied so the key stays
 - **Practice search** uses Places Autocomplete, limited to the South Bay. Picking a result gives the exact Google listing, so the scan never guesses which practice was meant.
 - **Map rank** runs a Text Search for the practice type (for example "dentist") centered on the chosen city, then finds the practice's position in the top 20. Real rank shifts with where a patient searches, and the report says so.
 - **Profile and review checks** come from Place Details: category, website, phone, hours, photos, rating and review count. Google returns at most 10 photos per place, so the photo check uses a 10-photo threshold.
+- An autocomplete session token is reused on the Place Details call, which is how Google bills a search-then-select as one session.
 - **Not checked:** review recency. Google's API returns only 5 "most relevant" reviews, not the newest, so it can't tell when the last review came in. Orthodontists and med spas are graded leniently on category, because Google's API reports them as "Dentist" and "Spa".
 
 ## How the website checks work
@@ -70,7 +71,6 @@ app/api/places/autocomplete/route.ts   Practice search, proxied so the key stays
 - **Homepage scan** loads the website linked on Google, the way a phone would, and looks for a `tel:` link, online booking (common booking tools or "book an appointment" links), links to at least 3 service pages, insurance or financing info, local business structured data, and FAQ content.
 - The website address comes from the business's Google listing, so the scan only fetches public http(s) addresses on standard ports. It refuses private, local and cloud-metadata addresses, checks every redirect, and stops reading after 2 MB.
 - Only the homepage is scanned. A site that keeps booking or services deeper in the site with no homepage link will miss those checks.
-
-- An autocomplete session token is reused on the Place Details call, which is how Google bills a search-then-select as one session.
+- If a site blocks the scan, its checks are skipped and left out of the score instead of counted as failures. The total is scaled over the categories that could be measured.
 
 The browser calls `POST /api/grade` with `{ practiceName, city, practiceType, placeId, sessionToken }` and gets back a `Report`. Later stages change only what happens inside that endpoint, so the screens stay the same.

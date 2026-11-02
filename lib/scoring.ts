@@ -10,7 +10,10 @@ export function scoreCategory(checks: Check[]): number {
 
 export function summarize(categories: Category[], practiceType: PracticeType) {
   const t = PRACTICE_TYPES[practiceType];
-  const total = categories.reduce((a, c) => a + c.score, 0);
+  // Categories we couldn't measure are left out, and the rest scaled to 100.
+  const measured = categories.filter((c) => !c.skipped);
+  const raw = measured.reduce((a, c) => a + c.score, 0);
+  const total = measured.length ? Math.round((raw * 100) / (measured.length * 25)) : 0;
   const problems = categories.reduce((a, c) => a + c.checks.filter((x) => !x.passed).length, 0);
   // Rough estimate: the further below 100, the larger the share of local searches lost.
   const missedPatientsPerMonth = Math.max(2, Math.round((t.baseMonthlyPatients * (100 - total)) / 100));

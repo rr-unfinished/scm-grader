@@ -51,8 +51,15 @@ export interface FetchedPage {
   finalUrl: string;
 }
 
-/** Returns null when the site can't be loaded. */
+const DESKTOP_UA =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36";
+
+/** Returns null when the site can't be loaded. Tries a phone browser, then a desktop one. */
 export async function fetchHomepage(rawUrl: string): Promise<FetchedPage | null> {
+  return (await fetchOnce(rawUrl, UA)) ?? (await fetchOnce(rawUrl, DESKTOP_UA));
+}
+
+async function fetchOnce(rawUrl: string, userAgent: string): Promise<FetchedPage | null> {
   let url: URL;
   try {
     url = new URL(rawUrl);
@@ -64,7 +71,7 @@ export async function fetchHomepage(rawUrl: string): Promise<FetchedPage | null>
       await assertPublic(url);
       const res = await fetch(url, {
         redirect: "manual",
-        headers: { "User-Agent": UA, Accept: "text/html,application/xhtml+xml" },
+        headers: { "User-Agent": userAgent, Accept: "text/html,application/xhtml+xml", "Accept-Language": "en-US,en;q=0.9" },
         signal: AbortSignal.timeout(TIMEOUT_MS),
         cache: "no-store",
       });

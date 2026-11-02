@@ -169,6 +169,8 @@ input:focus, select:focus { outline: 2px solid var(--teal); outline-offset: 1px;
 .g-strong { color: var(--good); background: var(--good-bg); }
 .g-needs-work { color: var(--warn); background: var(--warn-bg); }
 .g-poor { color: var(--bad); background: var(--bad-bg); }
+.g-skipped { color: var(--muted); background: #fff; border: 1px solid var(--line); }
+.cat .score.skipped { font-size: 20px; color: var(--muted); letter-spacing: 0; line-height: 1.4; }
 
 .cats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
 .cat { background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 24px; display: flex; flex-direction: column; gap: 10px; cursor: pointer; text-align: left; color: var(--ink); }

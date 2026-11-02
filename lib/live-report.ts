@@ -185,8 +185,9 @@ const safeHost = (u: string) => {
   }
 };
 
-const cantCheck = (host: string | null) =>
-  host ? `We couldn't load ${host} to check this.` : "No website is linked on your Google profile, so patients can't check this either.";
+const NO_SITE = "No website is linked on your Google profile, so patients can't find this either.";
+const blockedNote = (host: string) =>
+  `We couldn't load ${host} to run these checks, so they're left out of your score. This usually means the site blocks automated visitors.`;
 
 function websiteCategory(
   t: (typeof PRACTICE_TYPES)[keyof typeof PRACTICE_TYPES],
@@ -195,6 +196,7 @@ function websiteCategory(
   f: SiteFindings | null,
 ): Category {
   const checks: Check[] = [];
+  let note: string | undefined;
 
   if (speed) {
     checks.push({
@@ -208,85 +210,109 @@ function websiteCategory(
       passed: speed.lcpSeconds <= 2.5,
       weight: 6,
     });
-  } else if (!host) {
-    checks.push({ id: "speed", title: "Loads fast on a phone", detail: cantCheck(null), passed: false, weight: 6 });
   }
   // If PageSpeed timed out on a real site, the speed check is left out rather than guessed.
 
-  const found = f?.services ?? [];
-  checks.push(
-    {
-      id: "tap-call",
-      title: "Tap-to-call button on mobile",
-      detail: f ? (f.tapToCall ? "Your phone number is tappable on mobile." : "Make your phone number a tap-to-call link. Most new-patient calls come from a phone.") : cantCheck(host),
-      passed: Boolean(f?.tapToCall),
-      weight: 5,
-    },
-    {
-      id: "booking",
-      title: "Online booking on your site",
-      detail: f ? (f.booking ? "Patients can book or request a visit online." : "Add online booking so patients can book after hours, when many of them are searching.") : cantCheck(host),
-      passed: Boolean(f?.booking),
-      weight: 5,
-    },
-    {
-      id: "service-pages",
-      title: "Pages for your main services",
-      detail: f
-        ? found.length >= 3
-          ? `Your homepage links to pages for ${listOf(found.slice(0, 4))}.`
-          : `Add separate pages for ${t.services}. Each page helps you rank for that treatment.`
-        : cantCheck(host),
-      value: f ? `${found.length} found` : undefined,
-      passed: found.length >= 3,
-      weight: 5,
-    },
-    {
-      id: "insurance",
-      title: "Insurance and pricing info",
-      detail: f
-        ? f.insurance
+  if (!host) {
+    // No website at all is a real, fixable problem, so these count as failed.
+    checks.push(
+      { id: "speed", title: "Loads fast on a phone", detail: NO_SITE, passed: false, weight: 6 },
+      { id: "tap-call", title: "Tap-to-call button on mobile", detail: NO_SITE, passed: false, weight: 5 },
+      { id: "booking", title: "Online booking on your site", detail: NO_SITE, passed: false, weight: 5 },
+      { id: "service-pages", title: "Pages for your main services", detail: NO_SITE, passed: false, weight: 5 },
+      { id: "insurance", title: "Insurance and pricing info", detail: NO_SITE, passed: false, weight: 4 },
+    );
+  } else if (!f) {
+    // The site exists but blocked us. Don't penalize the practice for that.
+    note = blockedNote(host);
+  } else {
+    const found = f.services;
+    checks.push(
+      {
+        id: "tap-call",
+        title: "Tap-to-call button on mobile",
+        detail: f.tapToCall ? "Your phone number is tappable on mobile." : "Make your phone number a tap-to-call link. Most new-patient calls come from a phone.",
+        passed: f.tapToCall,
+        weight: 5,
+      },
+      {
+        id: "booking",
+        title: "Online booking on your site",
+        detail: f.booking ? "Patients can book or request a visit online." : "Add online booking so patients can book after hours, when many of them are searching.",
+        passed: f.booking,
+        weight: 5,
+      },
+      {
+        id: "service-pages",
+        title: "Pages for your main services",
+        detail:
+          found.length >= 3
+            ? `Your homepage links to pages for ${listOf(found.slice(0, 4))}.`
+            : `Add separate pages for ${t.services}. Each page helps you rank for that treatment.`,
+        value: `${found.length} found`,
+        passed: found.length >= 3,
+        weight: 5,
+      },
+      {
+        id: "insurance",
+        title: "Insurance and pricing info",
+        detail: f.insurance
           ? "Your homepage mentions insurance, financing or pricing."
-          : 'Add an "insurance we accept" section. It answers the first question patients ask.'
-        : cantCheck(host),
-      passed: Boolean(f?.insurance),
-      weight: 4,
-    },
-  );
-  return { id: "web", name: "Website", checks, score: scoreCategory(checks), sample: false };
+          : 'Add an "insurance we accept" section. It answers the first question patients ask.',
+        passed: f.insurance,
+        weight: 4,
+      },
+    );
+  }
+  return {
+    id: "web",
+    name: "Website",
+    checks,
+    score: scoreCategory(checks),
+    sample: false,
+    note,
+    skipped: checks.length === 0,
+  };
 }
 
 function aiCategory(sample: Category, host: string | null, f: SiteFindings | null, schemaType: string): Category {
   const kept = sample.checks
     .filter((c) => c.id === "chatgpt" || c.id === "ai-overviews")
     .map((c) => ({ ...c, sample: true }));
-  const checks: Check[] = [
-    ...kept,
-    {
-      id: "schema",
-      title: "Structured data for your practice",
-      detail: f
-        ? f.localSchema
+  const checks: Check[] = [...kept];
+  let note: string | undefined;
+
+  if (!host) {
+    checks.push(
+      { id: "schema", title: "Structured data for your practice", detail: NO_SITE, passed: false, weight: 6 },
+      { id: "faq", title: "Answers to common patient questions", detail: NO_SITE, passed: false, weight: 6 },
+    );
+  } else if (!f) {
+    note = `We couldn't load ${host}, so the structured data and FAQ checks were skipped and left out of your score.`;
+  } else {
+    checks.push(
+      {
+        id: "schema",
+        title: "Structured data for your practice",
+        detail: f.localSchema
           ? "Your site tells search and AI tools your practice details in a format they read directly."
-          : `Add ${schemaType} schema so AI tools can read your hours, location and services.`
-        : cantCheck(host),
-      value: f?.localSchema ? f.schemaTypes.find((x) => x.toLowerCase() !== "website" && x.toLowerCase() !== "webpage") : undefined,
-      passed: Boolean(f?.localSchema),
-      weight: 6,
-    },
-    {
-      id: "faq",
-      title: "Answers to common patient questions",
-      detail: f
-        ? f.faq
-          ? "Your site has FAQ content that AI assistants can quote."
-          : "Add an FAQ section. It's what AI assistants quote back to patients."
-        : cantCheck(host),
-      passed: Boolean(f?.faq),
-      weight: 6,
-    },
-  ];
-  return { id: "ai", name: "AI search", checks, score: scoreCategory(checks), sample: checks.every((c) => c.sample) };
+          : `Add ${schemaType} schema so AI tools can read your hours, location and services.`,
+        value: f.localSchema
+          ? f.schemaTypes.find((x) => !["website", "webpage", "organization"].includes(x.toLowerCase()))
+          : undefined,
+        passed: f.localSchema,
+        weight: 6,
+      },
+      {
+        id: "faq",
+        title: "Answers to common patient questions",
+        detail: f.faq ? "Your site has FAQ content that AI assistants can quote." : "Add an FAQ section. It's what AI assistants quote back to patients.",
+        passed: f.faq,
+        weight: 6,
+      },
+    );
+  }
+  return { id: "ai", name: "AI search", checks, score: scoreCategory(checks), sample: checks.every((c) => c.sample), note };
 }
 
 function listOf(items: string[]): string {
