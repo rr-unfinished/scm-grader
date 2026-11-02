@@ -64,7 +64,12 @@ function headers(extra: Record<string, string> = {}) {
   return h;
 }
 
-const url = (path: string) => `${process.env.SUPABASE_URL!.replace(/\/$/, "")}/rest/v1/${path}`;
+/** Accepts the project URL with or without a trailing "/rest/v1/" (Supabase shows both). */
+export function supabaseBase(raw = process.env.SUPABASE_URL ?? ""): string {
+  return raw.trim().replace(/\/+$/, "").replace(/\/rest\/v1$/, "");
+}
+
+const url = (path: string) => `${supabaseBase()}/rest/v1/${path}`;
 
 export async function saveLead(input: {
   lead: LeadInput;

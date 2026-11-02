@@ -2,13 +2,13 @@ import { NextResponse } from "next/server";
 import { openaiConfigured } from "@/lib/ai-check";
 import { emailConfigured } from "@/lib/email";
 import { placesConfigured } from "@/lib/google-places";
-import { leadsConfigured } from "@/lib/leads";
+import { leadsConfigured, supabaseBase } from "@/lib/leads";
 
 export const dynamic = "force-dynamic";
 
 /** Which services are connected. Reports yes/no only, never key values. */
 export function GET() {
-  const supabaseUrl = process.env.SUPABASE_URL ?? "";
+  const supabaseUrl = supabaseBase();
   const supaKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
   return NextResponse.json({
     google: placesConfigured(),
