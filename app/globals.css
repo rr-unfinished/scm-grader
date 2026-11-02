@@ -148,6 +148,9 @@ input:focus, select:focus { outline: 2px solid var(--teal); outline-offset: 1px;
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* Report */
+.savebar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; background: var(--teal-pill); border-radius: 16px; padding: 12px 12px 12px 20px; }
+.savebar p { font-size: 15px; color: var(--navy); min-width: 0; overflow-wrap: anywhere; }
+.btn-small { padding: 10px 16px; font-size: 14px; min-height: 40px; }
 .summary { display: grid; grid-template-columns: auto 1fr; gap: 36px; align-items: center; background: var(--navy); color: #fff; border-radius: 28px; padding: 40px; }
 .summary > * { min-width: 0; }
 .summary h2 { color: #fff; font-size: clamp(26px, 3.4vw, 36px); line-height: 1.12; letter-spacing: -0.8px; margin-top: 12px; }

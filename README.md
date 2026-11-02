@@ -4,7 +4,7 @@ A free online health score for South Bay dental and medical practices. A practic
 
 ## Status
 
-**Stage 4: complete.** Every check in a live report uses real data. Google AI Overviews is not checked, because Google offers no API for it; adding it would need a paid search-results tool such as SerpApi or DataForSEO.
+**Stage 5: complete.** Every lead is saved with its report, gets a private report link and an email, and South Coast Marketing is notified. Every check in a live report uses real data. Google AI Overviews is not checked, because Google offers no API for it; adding it would need a paid search-results tool such as SerpApi or DataForSEO.
 
 Without `GOOGLE_PLACES_API_KEY` the app falls back to sample data for everything, so it still runs locally with no keys.
 
@@ -14,8 +14,25 @@ Without `GOOGLE_PLACES_API_KEY` the app falls back to sample data for everything
 | 2 | Live Google data: Places autocomplete, map rank, rating, reviews, competitors | Done |
 | 3 | PageSpeed mobile speed and website checks (tap-to-call, booking, schema) | Done |
 | 4 | ChatGPT recommendation check | Done |
-| 5 | Save leads (Supabase), email the report (Resend), notify South Coast | Next |
-| 6 | Bot protection (Turnstile), caching, privacy page | |
+| 5 | Save leads (Supabase), email the report (Resend), notify South Coast | Done |
+| 6 | Bot protection (Turnstile), caching, privacy page | Next |
+
+## Leads and email setup
+
+1. **Supabase:** open your project's **SQL Editor**, paste `supabase/schema.sql`, and click **Run**. Then copy the **Project URL** and a **secret key** (Project Settings → API Keys).
+2. **Resend:** create an API key. To email prospects, add and verify your domain (Domains → Add domain, then add the DNS records it shows at your domain registrar). Until the domain is verified, Resend only delivers to your own Resend account address.
+3. **Vercel → Settings → Environment Variables:**
+
+| Variable | Value |
+| --- | --- |
+| `SUPABASE_URL` | Supabase Project URL, like `https://abcd.supabase.co` |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase secret key (server only) |
+| `RESEND_API_KEY` | Resend API key |
+| `RESEND_FROM` | Sender on your verified domain, like `South Coast Marketing <reports@southcoastmarketing.com>` |
+| `LEAD_NOTIFY_EMAIL` | Where new-lead and call-request emails go |
+| `SITE_URL` | Optional. Public address used in email links, like `https://grader.southcoastmarketing.com` |
+
+Leads live in the Supabase **Table Editor → leads**. Rows include contact info, the full report, and `wants_call_at` when someone clicked "Book my free audit call". If a scan fails, the lead is still saved with `scan_error`.
 
 ## Run it locally
 
@@ -53,9 +70,14 @@ lib/
   live-report.ts        Builds the report from live Google data
   pagespeed.ts          Mobile load time from PageSpeed Insights
   site-scan.ts          Safe homepage fetch + website/AI-readiness analysis
+  leads.ts              Saves leads and reports in Supabase; reads saved reports
+  email.ts              Report email to the practice, lead alerts to South Coast (Resend)
   ai-check.ts           Asks ChatGPT for local recommendations and checks for the practice
   sample-report.ts      Sample data, used only when no Google key is set
 app/api/places/autocomplete/route.ts   Practice search, proxied so the key stays on the server
+app/api/book/route.ts                  Records a call request and notifies South Coast once
+app/r/[id]/page.tsx                    Saved report page (private link, not indexed)
+supabase/schema.sql                    Leads table, run once in Supabase
 ```
 
 ## How the Google checks work

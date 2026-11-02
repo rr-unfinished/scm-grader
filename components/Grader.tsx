@@ -37,7 +37,7 @@ export default function Grader() {
   const [lead, setLead] = useState<Lead>(EMPTY_LEAD);
   const [step, setStep] = useState(1);
   const [error, setError] = useState("");
-  const [report, setReport] = useState<Report | null>(null);
+  const [report, setReport] = useState<(Report & { reportId?: string | null; emailed?: boolean }) | null>(null);
   const [picked, setPicked] = useState<PickedPlace | null>(null);
   const [sessionToken, setSessionToken] = useState("");
   const [configured, setConfigured] = useState(true);
@@ -139,8 +139,11 @@ export default function Grader() {
         practiceType={practiceType}
         placeId={picked && picked.name === practiceName ? picked.placeId : undefined}
         sessionToken={sessionToken}
+        lead={lead}
         onDone={(r) => {
           setReport(r);
+          // Give the report its own address, so a refresh or bookmark keeps it.
+          if (r.reportId) window.history.replaceState(null, "", `/r/${r.reportId}`);
           // A session token covers one autocomplete + details pair.
           setSessionToken(newToken());
           go("report");
@@ -162,7 +165,18 @@ export default function Grader() {
   }
 
   if (view === "report" && report) {
-    return <ReportView report={report} firstName={lead.firstName.trim()} onAgain={reset} />;
+    return (
+      <ReportView
+        report={report}
+        firstName={lead.firstName.trim()}
+        onAgain={() => {
+          window.history.replaceState(null, "", "/");
+          reset();
+        }}
+        reportId={report.reportId}
+        emailedTo={report.emailed ? lead.email.trim() : null}
+      />
+    );
   }
 
   return null;
@@ -362,7 +376,8 @@ function ScanView(props: {
   practiceType: PracticeType;
   placeId?: string;
   sessionToken: string;
-  onDone: (r: Report) => void;
+  lead: Lead;
+  onDone: (r: Report & { reportId?: string | null; emailed?: boolean }) => void;
   onError: (msg: string, badListing: boolean) => void;
 }) {
   const t = PRACTICE_TYPES[props.practiceType];
@@ -392,6 +407,7 @@ function ScanView(props: {
         practiceType: props.practiceType,
         placeId: props.placeId,
         sessionToken: props.sessionToken,
+        lead: props.lead,
       }),
       signal: ctrl.signal,
     })
@@ -400,7 +416,7 @@ function ScanView(props: {
         if (!res.ok) {
           failed.current = {
             msg: data.error || "We couldn't finish the scan. Try again in a minute.",
-            badListing: res.status === 400,
+            badListing: res.status === 400 && data.field !== "lead",
           };
           return;
         }

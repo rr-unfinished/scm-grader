@@ -13,17 +13,75 @@ export default function ReportView({
   report,
   firstName,
   onAgain,
+  reportId,
+  emailedTo,
+  savedAt,
 }: {
   report: Report;
   firstName: string;
-  onAgain: () => void;
+  /** Restart in place; without it, "Grade another practice" links home */
+  onAgain?: () => void;
+  /** Saved report ID, when leads are stored */
+  reportId?: string | null;
+  /** Shown as "We also emailed this report to ..." */
+  emailedTo?: string | null;
+  /** When a saved report was created */
+  savedAt?: string;
 }) {
   const t = PRACTICE_TYPES[report.practiceType];
   const overall = gradeOf(report.total, 100);
-  const [booked, setBooked] = useState(false);
+  const [booking, setBooking] = useState<"idle" | "sending" | "done" | "error">("idle");
+  const [copied, setCopied] = useState(false);
+  const link = reportId && typeof window !== "undefined" ? `${window.location.origin}/r/${reportId}` : null;
+
+  const book = async () => {
+    if (!reportId) return setBooking("done");
+    setBooking("sending");
+    try {
+      const res = await fetch("/api/book", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reportId }),
+      });
+      setBooking(res.ok ? "done" : "error");
+    } catch {
+      setBooking("error");
+    }
+  };
+
+  const copy = async () => {
+    if (!link) return;
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      window.prompt("Copy your report link:", link);
+    }
+  };
 
   return (
     <section className="view">
+      {(reportId || savedAt) && (
+        <div className="savebar">
+          <p>
+            {emailedTo ? (
+              <>
+                We also emailed this report to <b>{emailedTo}</b>.
+              </>
+            ) : savedAt ? (
+              <>Report from {new Date(savedAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "America/Los_Angeles" })}.</>
+            ) : (
+              <>Your report is saved.</>
+            )}
+          </p>
+          {reportId && (
+            <button type="button" className="btn btn-ghost btn-small" onClick={copy}>
+              {copied ? "Link copied" : "Copy report link"}
+            </button>
+          )}
+        </div>
+      )}
       <div className="summary">
         <ScoreRing score={report.total} on="navy" />
         <div>
@@ -172,12 +230,19 @@ export default function ReportView({
           <p>Book a free 20-minute call. We&apos;ll walk through your report and show you what to fix first.</p>
         </div>
         <div>
-          {booked ? (
-            <p className="booked">Thanks! We&apos;ll reply within one business day to pick a time.</p>
+          {booking === "done" ? (
+            <p className="booked" role="status">Thanks! We&apos;ll reach out within one business day to pick a time.</p>
           ) : (
-            <button type="button" className="btn btn-white" onClick={() => setBooked(true)}>
-              Book my free audit call
-            </button>
+            <>
+              <button type="button" className="btn btn-white" onClick={book} disabled={booking === "sending"}>
+                {booking === "sending" ? "Sending..." : "Book my free audit call"}
+              </button>
+              {booking === "error" && (
+                <p className="booked" role="alert" style={{ marginTop: 10, fontWeight: 600 }}>
+                  That didn&apos;t go through. Try again, or reply to the report email.
+                </p>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -187,9 +252,15 @@ export default function ReportView({
         volume in the South Bay.
       </p>
       <div>
-        <button type="button" className="btn btn-ghost" onClick={onAgain}>
-          Grade another practice
-        </button>
+        {onAgain ? (
+          <button type="button" className="btn btn-ghost" onClick={onAgain}>
+            Grade another practice
+          </button>
+        ) : (
+          <a className="btn btn-ghost" href="/" style={{ textDecoration: "none", display: "inline-block" }}>
+            Grade another practice
+          </a>
+        )}
       </div>
     </section>
   );
