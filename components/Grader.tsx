@@ -6,6 +6,7 @@ import type { PracticeType, Report } from "@/lib/types";
 import { CheckIcon, SparkleIcon } from "./icons";
 import PracticeSearch, { type PickedPlace } from "./PracticeSearch";
 import ReportView from "./ReportView";
+import Turnstile, { turnstileEnabled } from "./Turnstile";
 import ScoreRing from "./ScoreRing";
 
 type View = "start" | "quiz" | "scan" | "report";
@@ -41,6 +42,7 @@ export default function Grader() {
   const [picked, setPicked] = useState<PickedPlace | null>(null);
   const [sessionToken, setSessionToken] = useState("");
   const [configured, setConfigured] = useState(true);
+  const [humanToken, setHumanToken] = useState<string | null>(null);
 
   // Created on the client only, so server and browser renders match.
   useEffect(() => setSessionToken(newToken()), []);
@@ -103,6 +105,8 @@ export default function Grader() {
       if (step === 3) {
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(lead.email.trim())) return setError("Enter a valid email, like name@practice.com.");
         if (lead.phone.replace(/\D/g, "").length < 10) return setError("Enter a 10-digit mobile number.");
+        if (turnstileEnabled && !humanToken)
+          return setError("One moment while we check you're not a bot, then try again.");
         return go("scan");
       }
       setError("");
@@ -125,6 +129,7 @@ export default function Grader() {
           setError("");
         }}
         onLead={(patch) => setLead((l) => ({ ...l, ...patch }))}
+        onHumanToken={setHumanToken}
         onBack={back}
         onNext={next}
       />
@@ -140,6 +145,7 @@ export default function Grader() {
         placeId={picked && picked.name === practiceName ? picked.placeId : undefined}
         sessionToken={sessionToken}
         lead={lead}
+        turnstileToken={humanToken}
         onDone={(r) => {
           setReport(r);
           // Give the report its own address, so a refresh or bookmark keeps it.
@@ -149,6 +155,7 @@ export default function Grader() {
           go("report");
         }}
         onError={(msg, badListing) => {
+          setHumanToken(null); // tokens are single-use; step 3 gets a fresh one
           // A listing problem sends them back to search; anything else lets them retry.
           if (badListing) {
             setPicked(null);
@@ -283,6 +290,7 @@ function QuizView(props: {
   error: string;
   onType: (t: PracticeType) => void;
   onLead: (patch: Partial<Lead>) => void;
+  onHumanToken: (t: string | null) => void;
   onBack: () => void;
   onNext: () => void;
 }) {
@@ -352,7 +360,13 @@ function QuizView(props: {
             </label>
             <p className="fine">
               By continuing you agree that South Coast Marketing may contact you about your report. Message and data rates may apply.
+              See our{" "}
+              <a href="/privacy" target="_blank" rel="noopener noreferrer">
+                privacy policy
+              </a>
+              .
             </p>
+            <Turnstile onToken={props.onHumanToken} />
           </div>
         )}
 
@@ -377,6 +391,7 @@ function ScanView(props: {
   placeId?: string;
   sessionToken: string;
   lead: Lead;
+  turnstileToken: string | null;
   onDone: (r: Report & { reportId?: string | null; emailed?: boolean }) => void;
   onError: (msg: string, badListing: boolean) => void;
 }) {
@@ -408,6 +423,7 @@ function ScanView(props: {
         placeId: props.placeId,
         sessionToken: props.sessionToken,
         lead: props.lead,
+        turnstileToken: props.turnstileToken,
       }),
       signal: ctrl.signal,
     })

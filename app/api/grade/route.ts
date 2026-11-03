@@ -3,8 +3,10 @@ import { attioConfigured, syncLeadToAttio } from "@/lib/attio";
 import { emailConfigured, sendLeadNotification, sendReportEmail } from "@/lib/email";
 import { PlacesError, placesConfigured } from "@/lib/google-places";
 import { lastLeadError, leadsConfigured, saveLead, validateLead, type LeadInput } from "@/lib/leads";
+import { checkLimits, recentReport, visitorHash } from "@/lib/guard";
 import { buildLiveReport } from "@/lib/live-report";
 import { isPracticeType, isSouthBayCity } from "@/lib/practice-types";
+import { verifyTurnstile } from "@/lib/turnstile";
 import { buildSampleReport } from "@/lib/sample-report";
 import type { GradeRequest, Report } from "@/lib/types";
 
@@ -39,6 +41,17 @@ export async function POST(request: Request) {
   const req: GradeRequest = { practiceName, city, practiceType: body.practiceType, placeId, sessionToken };
   const origin = (process.env.SITE_URL || new URL(request.url).origin).replace(/\/$/, "");
 
+  const human = await verifyTurnstile((body as { turnstileToken?: unknown }).turnstileToken, request);
+  if (!human) {
+    return NextResponse.json(
+      { error: "We couldn't confirm you're not a bot. Refresh the page and try again.", field: "turnstile" },
+      { status: 403 },
+    );
+  }
+  const ipHash = visitorHash(request);
+  const limited = await checkLimits(ipHash);
+  if (limited) return NextResponse.json({ error: limited, field: "limit" }, { status: 429 });
+
   let report: Report;
   if (!placesConfigured()) {
     report = buildSampleReport(req);
@@ -48,8 +61,10 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   } else {
+    // Reuse a report for the same practice from the last 24 hours instead of paying for a new scan.
+    const reused = await recentReport(placeId, req.practiceType, req.city);
     try {
-      report = await buildLiveReport({ ...req, placeId });
+      report = reused ?? (await buildLiveReport({ ...req, placeId }));
     } catch (e) {
       if (e instanceof PlacesError && (e.status === 400 || e.status === 404)) {
         return NextResponse.json(
@@ -60,14 +75,14 @@ export async function POST(request: Request) {
       const scanError = e instanceof Error ? e.message : String(e);
       console.error("[grade] live scan failed:", scanError);
       // Keep the lead even though the scan failed, so South Coast can follow up.
-      await recordLead({ lead, req, report: null, scanError, origin });
+      await recordLead({ lead, req, report: null, scanError, origin, ipHash });
       return NextResponse.json({ error: "We couldn't reach Google just now. Try again in a minute." }, { status: 502 });
     }
   }
 
   // debugCrm: wait for the Attio update and report what it sent (only for this lead).
   const debugCrm = (body as { debugCrm?: unknown }).debugCrm === true;
-  const { reportId, crm } = await recordLead({ lead, req, report, origin, debugCrm });
+  const { reportId, crm } = await recordLead({ lead, req, report, origin, debugCrm, ipHash });
   const diagnostics = [...(report.diagnostics ?? [])];
   if (!reportId) diagnostics.push(leadsConfigured() ? `leads: ${lastLeadError ?? "save failed"}` : "leads: not configured");
   return NextResponse.json({
@@ -87,8 +102,9 @@ async function recordLead(opts: {
   scanError?: string;
   origin: string;
   debugCrm?: boolean;
+  ipHash?: string | null;
 }): Promise<{ reportId: string | null; crm?: unknown }> {
-  const { lead, req, report, scanError, origin, debugCrm } = opts;
+  const { lead, req, report, scanError, origin, debugCrm, ipHash } = opts;
   const reportId = leadsConfigured()
     ? await saveLead({
         lead,
@@ -98,6 +114,7 @@ async function recordLead(opts: {
         placeId: req.placeId,
         report,
         scanError,
+        ipHash,
       })
     : null;
   const link = reportId ? `${origin}/r/${reportId}` : null;

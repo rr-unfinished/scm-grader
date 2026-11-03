@@ -1,4 +1,5 @@
 /* eslint-disable @next/next/no-img-element */
+import { CONTACT_EMAIL, CONTACT_PHONE } from "@/lib/site";
 export function SiteHeader() {
   return (
     <header className="top">
@@ -29,8 +30,9 @@ export function SiteFooter() {
         </div>
         <div className="fl">
           <span>Serving the South Bay</span>
-          <span>[phone]</span>
-          <span>[email]</span>
+          <span>{CONTACT_PHONE}</span>
+          <span>{CONTACT_EMAIL}</span>
+          <a href="/privacy">Privacy policy</a>
         </div>
       </div>
     </footer>

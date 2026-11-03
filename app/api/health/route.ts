@@ -4,6 +4,7 @@ import { attioConfigured, attioStatus } from "@/lib/attio";
 import { emailConfigured } from "@/lib/email";
 import { placesConfigured } from "@/lib/google-places";
 import { leadsConfigured, supabaseBase } from "@/lib/leads";
+import { turnstileConfigured } from "@/lib/turnstile";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,7 @@ export async function GET(request: Request) {
     resendFromSet: Boolean(process.env.RESEND_FROM),
     leadNotifySet: Boolean(process.env.LEAD_NOTIFY_EMAIL),
     attio: attioConfigured(),
+    botCheck: turnstileConfigured() && Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY),
     // ?attio=1 runs read-only checks against Attio (token, workspace, list, columns).
     ...(new URL(request.url).searchParams.get("attio") ? { attioDetails: await attioStatus() } : {}),
   });

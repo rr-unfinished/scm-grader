@@ -7,7 +7,7 @@ import "server-only";
 import type { Report } from "./types";
 
 export const CONSENT_TEXT =
-  "By continuing you agree that South Coast Marketing may contact you about your report. Message and data rates may apply.";
+  "By continuing you agree that South Coast Marketing may contact you about your report. Message and data rates may apply. See our privacy policy.";
 
 export interface LeadInput {
   firstName: string;
@@ -79,9 +79,11 @@ export async function saveLead(input: {
   placeId?: string;
   report: Report | null;
   scanError?: string;
+  /** Hashed visitor IP, for scan limits */
+  ipHash?: string | null;
 }): Promise<string | null> {
   const { diagnostics: _omit, ...report } = input.report ?? ({} as Report);
-  const row = {
+  const row: Record<string, unknown> = {
     first_name: input.lead.firstName,
     last_name: input.lead.lastName || null,
     role: input.lead.role,
@@ -96,15 +98,27 @@ export async function saveLead(input: {
     report: input.report ? report : null,
     scan_error: input.scanError ?? null,
   };
+  if (input.ipHash) row.ip_hash = input.ipHash;
   lastLeadError = null;
   try {
-    const res = await fetch(url("leads?select=id"), {
-      method: "POST",
-      headers: headers({ Prefer: "return=representation" }),
-      body: JSON.stringify(row),
-      signal: AbortSignal.timeout(8000),
-      cache: "no-store",
-    });
+    const post = (body: Record<string, unknown>) =>
+      fetch(url("leads?select=id"), {
+        method: "POST",
+        headers: headers({ Prefer: "return=representation" }),
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(8000),
+        cache: "no-store",
+      });
+    let res = await post(row);
+    // Before the stage 6 SQL is run there's no ip_hash column; save without it.
+    if (res.status === 400 && "ip_hash" in row) {
+      const text = await res.clone().text().catch(() => "");
+      if (text.includes("ip_hash")) {
+        console.error("[leads] ip_hash column missing; run the stage 6 SQL in supabase/schema.sql");
+        const { ip_hash: _drop, ...rest } = row;
+        res = await post(rest);
+      }
+    }
     if (!res.ok) {
       const text = await res.text().catch(() => "");
       console.error(`[leads] save ${res.status}: ${text.slice(0, 300)}`);

@@ -33,3 +33,9 @@ create index if not exists leads_created_at_idx on public.leads (created_at desc
 create index if not exists leads_email_idx on public.leads (lower(email));
 
 alter table public.leads enable row level security;
+
+-- Stage 6 (scan limits). Safe to run more than once.
+-- Stores a one-way hash of the visitor's IP, never the IP itself.
+alter table public.leads add column if not exists ip_hash text;
+create index if not exists leads_ip_hash_created_idx on public.leads (ip_hash, created_at desc);
+create index if not exists leads_place_reuse_idx on public.leads (place_id, practice_type, city, created_at desc);

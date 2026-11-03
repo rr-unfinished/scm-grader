@@ -134,6 +134,8 @@ input:focus, select:focus { outline: 2px solid var(--teal); outline-offset: 1px;
 .actions { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .err { color: var(--bad); font-size: 14px; font-weight: 600; }
 .fine { font-size: 13px; color: var(--muted); }
+.fine a { color: var(--teal-ink); font-weight: 600; }
+.turnstile:empty { display: none; }
 
 /* Scan */
 .scan { align-items: center; text-align: center; }
@@ -248,3 +250,14 @@ footer .fl { display: flex; flex-wrap: wrap; gap: 24px; font-size: 14px; }
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
+
+footer .fl a { color: var(--footer-ink); }
+
+/* Privacy policy */
+.legal { max-width: 720px; display: flex; flex-direction: column; gap: 16px; }
+.legal h1 { font-size: clamp(34px, 5vw, 48px); letter-spacing: -1.2px; margin-top: 8px; }
+.legal h2 { font-size: 22px; letter-spacing: -0.4px; margin-top: 20px; }
+.legal p, .legal li { color: var(--body); font-size: 16px; line-height: 1.7; }
+.legal ul { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 6px; }
+.legal b { color: var(--navy); }
+.legal .updated { color: var(--muted); font-size: 14px; }

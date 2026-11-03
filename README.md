@@ -15,7 +15,7 @@ Without `GOOGLE_PLACES_API_KEY` the app falls back to sample data for everything
 | 3 | PageSpeed mobile speed and website checks (tap-to-call, booking, schema) | Done |
 | 4 | ChatGPT recommendation check | Done |
 | 5 | Save leads (Supabase), email the report (Resend), notify South Coast | Done |
-| 6 | Bot protection (Turnstile), caching, privacy page | Next |
+| 6 | Bot protection (Turnstile), scan reuse and limits, privacy page | Done |
 
 ## Leads and email setup
 
@@ -75,6 +75,19 @@ Select options must match the names above exactly. If Attio rejects a value, the
 
 If Attio is down or rejects a request, the lead is still saved in Supabase and the emails still go out; the error is logged in Vercel.
 
+## Cost protection (stage 6)
+
+- **Scan reuse:** a practice scanned in the last 24 hours (same Google listing, practice type and city) reuses that report, so there are no new Google, PageSpeed or OpenAI charges. A new lead is still saved and emailed.
+- **Scan limits:** 5 scans per visitor per hour, 15 per day, and 300 across everyone per day. Visitors are counted by a salted one-way hash of their IP; raw IPs are never stored. Change with `SCAN_LIMIT_HOUR`, `SCAN_LIMIT_DAY`, `SCAN_LIMIT_GLOBAL_DAY` and `SCAN_REUSE_HOURS`.
+- **Bot check:** Cloudflare Turnstile on the last quiz step, verified on the server before any scan. Off until both keys are set. Usually invisible; shows a checkbox only when Cloudflare is unsure.
+- **Privacy policy** at `/privacy`, linked from the consent text and the footer.
+
+Setup:
+
+1. **Supabase:** run the "Stage 6" lines at the bottom of `supabase/schema.sql` in the SQL Editor. Until then, leads still save but per-visitor limits can't count.
+2. **Cloudflare:** dashboard → **Turnstile** → **Add widget**. Name it `scm-grader`, add your grader's hostname (for example `scm-grader.vercel.app`), mode **Managed**. Copy both keys.
+3. **Vercel:** add `NEXT_PUBLIC_TURNSTILE_SITE_KEY` (site key) and `TURNSTILE_SECRET_KEY` (secret key), plus `NEXT_PUBLIC_CONTACT_EMAIL` and `NEXT_PUBLIC_CONTACT_PHONE` for the footer and privacy page. Redeploy; `NEXT_PUBLIC_` values are built into the page.
+
 ## Run it locally
 
 You need Node 20 or newer.
@@ -112,6 +125,8 @@ lib/
   pagespeed.ts          Mobile load time from PageSpeed Insights
   site-scan.ts          Safe homepage fetch + website/AI-readiness analysis
   leads.ts              Saves leads and reports in Supabase; reads saved reports
+  guard.ts              Scan reuse and per-visitor limits
+  turnstile.ts          Cloudflare bot check (server side)
   attio.ts              Sends each lead to Attio (company, person, note)
   email.ts              Report email to the practice, lead alerts to South Coast (Resend)
   ai-check.ts           Asks ChatGPT for local recommendations and checks for the practice
@@ -119,6 +134,7 @@ lib/
 app/api/places/autocomplete/route.ts   Practice search, proxied so the key stays on the server
 app/api/book/route.ts                  Records a call request and notifies South Coast once
 app/r/[id]/page.tsx                    Saved report page (private link, not indexed)
+app/privacy/page.tsx                   Privacy policy
 supabase/schema.sql                    Leads table, run once in Supabase
 ```
 
