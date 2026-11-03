@@ -198,11 +198,53 @@ async function findEntry(personId: string): Promise<string | null> {
  * (say, a select option name doesn't match), it retries one column at a time
  * so the good values still land, and logs the ones that didn't.
  */
+// Select columns' option titles, by slug, so values can match regardless of capitals.
+let optionCache: Promise<Record<string, string[]>> | null = null;
+
+function selectOptions(): Promise<Record<string, string[]>> {
+  if (!optionCache) {
+    optionCache = (async () => {
+      const attrs = await call<{ data: { api_slug: string; type: string; is_archived?: boolean }[] }>(
+        "GET",
+        `/lists/${encodeURIComponent(LIST)}/attributes?limit=200`,
+      );
+      const out: Record<string, string[]> = {};
+      for (const a of attrs.data.filter((x) => x.type === "select" && !x.is_archived)) {
+        const opts = await call<{ data: { title: string; is_archived: boolean }[] }>(
+          "GET",
+          `/lists/${encodeURIComponent(LIST)}/attributes/${a.api_slug}/options`,
+        );
+        out[a.api_slug] = opts.data.filter((o) => !o.is_archived).map((o) => o.title);
+      }
+      return out;
+    })().catch((e) => {
+      optionCache = null;
+      throw e;
+    });
+  }
+  return optionCache;
+}
+
 async function writeEntry(entryId: string | null, personId: string, values: Partial<Record<Column, unknown>>) {
   const slugs = await listSlugs();
+  const options = await selectOptions().catch(() => ({}) as Record<string, string[]>);
   const entryValues: Record<string, unknown> = {};
   for (const [key, val] of Object.entries(values) as [Column, unknown][]) {
-    if (val !== undefined && slugs[key]) entryValues[slugs[key]!] = val;
+    const slug = slugs[key];
+    if (val === undefined || !slug) continue;
+    const opts = options[slug];
+    if (opts && typeof val === "string") {
+      // Dropdown: use the option's exact title ("Medical Clinic" for "Medical clinic"),
+      // sent as a one-item list, which works for single- and multi-select columns.
+      const match = opts.find((o) => norm(o) === norm(val));
+      if (!match) {
+        console.error(`[attio] no "${val}" option in ${slug}; add it to the column in Attio`);
+        continue;
+      }
+      entryValues[slug] = [match];
+    } else {
+      entryValues[slug] = val;
+    }
   }
   const base = `/lists/${encodeURIComponent(LIST)}/entries`;
   let id = entryId;
@@ -374,7 +416,7 @@ export async function attioStatus() {
         const expected =
           key === "city" ? [...SOUTH_BAY_CITIES] : Object.values(PRACTICE_TYPES).map((t) => t.label);
         info.options = titles;
-        info.missingOptions = expected.filter((x) => !titles.includes(x));
+        info.missingOptions = expected.filter((x) => !titles.some((t) => norm(t) === norm(x)));
       }
       dropdowns[COLUMNS[key]] = info;
     }
