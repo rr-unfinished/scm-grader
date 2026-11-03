@@ -5,7 +5,11 @@
  * 1. The practice is created or updated as a Company, matched on its website domain.
  * 2. The person is created or updated as a Person, matched on email, and linked to the company.
  * 3. A note with the score, top fixes and report link is added to the person.
- * A later "Book my free audit call" click adds a second note.
+ * 4. If ATTIO_LIST is set, the person is added to that list at stage "New",
+ *    with their score and report link. Repeat scans update the score and link
+ *    but never move the stage back.
+ * A later "Book my free audit call" click adds a second note and moves the
+ * list entry to "Call requested".
  *
  * Matching on email and domain means repeat scans update the same records
  * instead of creating duplicates.
@@ -26,11 +30,11 @@ class AttioError extends Error {
   }
 }
 
-async function call<T>(method: "PUT" | "POST", path: string, body: unknown): Promise<T> {
+async function call<T>(method: "GET" | "PUT" | "POST" | "PATCH", path: string, body?: unknown): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method,
     headers: { Authorization: `Bearer ${process.env.ATTIO_API_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    body: body === undefined ? undefined : JSON.stringify(body),
     signal: AbortSignal.timeout(10000),
     cache: "no-store",
   });
@@ -100,6 +104,57 @@ async function upsertPerson(lead: LeadInput, companyId: string | null): Promise<
   }
 }
 
+/* ---------- List (pipeline) ---------- */
+
+const LIST = process.env.ATTIO_LIST || "";
+// Attribute slugs on the list. Attio makes them from the names you give them.
+const STAGE = process.env.ATTIO_LIST_STAGE_ATTRIBUTE || "stage";
+const SCORE = process.env.ATTIO_LIST_SCORE_ATTRIBUTE || "score";
+const REPORT = process.env.ATTIO_LIST_REPORT_ATTRIBUTE || "report_link";
+export const STAGE_NEW = "New";
+export const STAGE_CALL = "Call requested";
+
+async function findEntry(personId: string): Promise<string | null> {
+  const res = await call<{ data: { list_id: string; list_api_slug: string; entry_id: string }[] }>(
+    "GET",
+    `/objects/people/records/${personId}/entries?limit=1000`,
+  );
+  const hit = res.data.find((e) => e.list_api_slug === LIST || e.list_id === LIST);
+  return hit?.entry_id ?? null;
+}
+
+/** Writes values; if Attio rejects them (say, an attribute doesn't exist), keeps the entry and logs it. */
+async function writeEntry(entryId: string | null, personId: string, values: Record<string, unknown>) {
+  const path = entryId ? `/lists/${encodeURIComponent(LIST)}/entries/${entryId}` : `/lists/${encodeURIComponent(LIST)}/entries`;
+  const send = (v: Record<string, unknown>) =>
+    entryId
+      ? call("PATCH", path, { data: { entry_values: v } })
+      : call("POST", path, { data: { parent_record_id: personId, parent_object: "people", entry_values: v } });
+  try {
+    await send(values);
+  } catch (e) {
+    if (!(e instanceof AttioError) || e.status !== 400) throw e;
+    console.error(`[attio] list values rejected (${e.body.slice(0, 200)}); check the list's attributes`);
+    if (!entryId) await send({}); // still put them on the list
+  }
+}
+
+async function addToList(personId: string, report: Report | null, link: string | null) {
+  if (!LIST) return;
+  const values: Record<string, unknown> = {};
+  if (report) values[SCORE] = report.total;
+  if (link) values[REPORT] = link;
+  const entryId = await findEntry(personId);
+  // New entries start at "New"; existing ones keep whatever stage you've moved them to.
+  await writeEntry(entryId, personId, entryId ? values : { ...values, [STAGE]: STAGE_NEW });
+}
+
+async function moveToCallRequested(personId: string, link: string) {
+  if (!LIST) return;
+  const entryId = await findEntry(personId);
+  await writeEntry(entryId, personId, { [STAGE]: STAGE_CALL, [REPORT]: link });
+}
+
 async function addNote(personId: string, title: string, content: string) {
   await call("POST", "/notes", {
     data: { parent_object: "people", parent_record_id: personId, title, format: "plaintext", content },
@@ -149,6 +204,7 @@ export async function syncLeadToAttio(opts: {
       ? `Practice Grader: ${opts.practiceName} scored ${opts.report.total}/100`
       : `Practice Grader: ${opts.practiceName} (scan failed)`;
     await addNote(personId, title, reportNote(opts.lead, opts.report, opts.link, opts.practiceName, opts.city, opts.scanError));
+    await addToList(personId, opts.report, opts.link);
     return { ok: true, personId };
   } catch (e) {
     const error = e instanceof AttioError ? `${e.status} ${e.body.slice(0, 160)}` : e instanceof Error ? e.message : String(e);
@@ -166,6 +222,7 @@ export async function noteCallRequest(lead: LeadInput, practiceName: string, lin
       `Requested a free audit call: ${practiceName}`,
       `${lead.firstName} clicked "Book my free audit call" on their Practice Grader report.\n\nPhone: ${lead.phone}\nEmail: ${lead.email}\nReport: ${link}`,
     );
+    await moveToCallRequested(personId, link);
   } catch (e) {
     console.error("[attio] call note failed:", e instanceof AttioError ? `${e.status} ${e.body}` : e);
   }

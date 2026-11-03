@@ -41,7 +41,8 @@ With `ATTIO_API_KEY` set, every lead is sent to Attio after the scan:
 - **Company:** the practice, matched on its website domain (or the lead's work email domain), so repeat scans update the same company.
 - **Person:** matched on email, with name, role as job title, phone, and a link to the company.
 - **Note on the person:** score, category scores, top 5 fixes, Google map rank and the report link.
-- **Call request:** clicking "Book my free audit call" adds a second note, once.
+- **Call request:** clicking "Book my free audit call" adds a second note, once, and moves the list entry to Call requested.
+- **List (optional):** with `ATTIO_LIST` set, each person is added to that list at stage New with their score and report link. A repeat scan updates the score and link but leaves the stage alone, so it never undoes your pipeline moves.
 
 To set it up, in Attio go to **Workspace settings → Developers → Access tokens**, create a token named `scm-grader` with these scopes, and add it in Vercel as `ATTIO_API_KEY`:
 
@@ -50,6 +51,18 @@ To set it up, in Attio go to **Workspace settings → Developers → Access toke
 | Records (`record_permission`) | Read-write |
 | Object configuration (`object_configuration`) | Read |
 | Notes (`note`) | Read-write |
+| List entries (`list_entry`) | Read-write |
+| List configuration (`list_configuration`) | Read |
+
+For the list, create a **People** list (for example "Practice Grader Leads") with these attributes, then copy its API slug from the list's settings into `ATTIO_LIST`:
+
+| Attribute | Type | Slug the app writes |
+| --- | --- | --- |
+| Stage | Status, with at least `New` and `Call requested` | `stage` |
+| Score | Number | `score` |
+| Report link | Text or URL | `report_link` |
+
+If your slugs differ, set `ATTIO_LIST_STAGE_ATTRIBUTE`, `ATTIO_LIST_SCORE_ATTRIBUTE` or `ATTIO_LIST_REPORT_ATTRIBUTE`. If Attio rejects a value, the person is still added to the list and the problem is logged.
 
 If Attio is down or rejects a request, the lead is still saved in Supabase and the emails still go out; the error is logged in Vercel.
 
