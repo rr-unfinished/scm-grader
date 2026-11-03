@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { openaiConfigured } from "@/lib/ai-check";
+import { attioConfigured } from "@/lib/attio";
 import { emailConfigured } from "@/lib/email";
 import { placesConfigured } from "@/lib/google-places";
 import { leadsConfigured, supabaseBase } from "@/lib/leads";
@@ -19,5 +20,6 @@ export function GET() {
     resend: emailConfigured(),
     resendFromSet: Boolean(process.env.RESEND_FROM),
     leadNotifySet: Boolean(process.env.LEAD_NOTIFY_EMAIL),
+    attio: attioConfigured(),
   });
 }

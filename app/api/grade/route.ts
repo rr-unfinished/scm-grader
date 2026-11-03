@@ -1,4 +1,5 @@
 import { after, NextResponse } from "next/server";
+import { attioConfigured, syncLeadToAttio } from "@/lib/attio";
 import { emailConfigured, sendLeadNotification, sendReportEmail } from "@/lib/email";
 import { PlacesError, placesConfigured } from "@/lib/google-places";
 import { lastLeadError, leadsConfigured, saveLead, validateLead, type LeadInput } from "@/lib/leads";
@@ -75,7 +76,7 @@ export async function POST(request: Request) {
   });
 }
 
-/** Saves the lead, then sends emails after the response so the scan isn't slower. */
+/** Saves the lead, then sends emails and updates Attio after the response. */
 async function recordLead(opts: {
   lead: LeadInput;
   req: GradeRequest;
@@ -97,18 +98,18 @@ async function recordLead(opts: {
     : null;
   const link = reportId ? `${origin}/r/${reportId}` : null;
 
-  if (emailConfigured()) {
+  const practiceName = report?.practiceName ?? req.practiceName;
+  if (emailConfigured() || attioConfigured()) {
+    // Emails and the CRM run after the response, in parallel, so the scan isn't slower.
     after(async () => {
       await Promise.all([
-        report && link ? sendReportEmail(lead, report, link) : Promise.resolve(false),
-        sendLeadNotification({
-          lead,
-          practiceName: report?.practiceName ?? req.practiceName,
-          city: req.city,
-          report,
-          link,
-          scanError,
-        }),
+        emailConfigured() && report && link ? sendReportEmail(lead, report, link) : Promise.resolve(false),
+        emailConfigured()
+          ? sendLeadNotification({ lead, practiceName, city: req.city, report, link, scanError })
+          : Promise.resolve(false),
+        attioConfigured()
+          ? syncLeadToAttio({ lead, practiceName, city: req.city, report, link, scanError })
+          : Promise.resolve(null),
       ]);
     });
   }

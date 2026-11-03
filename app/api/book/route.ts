@@ -1,4 +1,5 @@
 import { after, NextResponse } from "next/server";
+import { attioConfigured, noteCallRequest } from "@/lib/attio";
 import { emailConfigured, sendLeadNotification } from "@/lib/email";
 import { getLead, isReportId, markWantsCall } from "@/lib/leads";
 
@@ -19,19 +20,25 @@ export async function POST(request: Request) {
   const isNew = await markWantsCall(id);
 
   // Only notify once, even if the button is clicked again or the report is shared.
-  if (isNew && emailConfigured()) {
+  if (isNew && (emailConfigured() || attioConfigured())) {
     const origin = (process.env.SITE_URL || new URL(request.url).origin).replace(/\/$/, "");
     after(async () => {
       const lead = await getLead(id);
       if (!lead) return;
-      await sendLeadNotification({
-        lead,
-        practiceName: lead.practiceName,
-        city: lead.city,
-        report: lead.report,
-        link: `${origin}/r/${id}`,
-        wantsCall: true,
-      });
+      const link = `${origin}/r/${id}`;
+      await Promise.all([
+        emailConfigured()
+          ? sendLeadNotification({
+              lead,
+              practiceName: lead.practiceName,
+              city: lead.city,
+              report: lead.report,
+              link,
+              wantsCall: true,
+            })
+          : Promise.resolve(false),
+        attioConfigured() ? noteCallRequest(lead, lead.practiceName, link) : Promise.resolve(),
+      ]);
     });
   }
   return NextResponse.json({ ok: true });

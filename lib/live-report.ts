@@ -65,6 +65,7 @@ export async function buildLiveReport(req: GradeRequest & { placeId: string }): 
     practiceName: name,
     address: place.formattedAddress,
     mapsUri: place.googleMapsUri,
+    website: place.websiteUri,
     city: req.city,
     practiceType: req.practiceType,
     ...summary,

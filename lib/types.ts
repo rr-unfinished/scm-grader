@@ -52,6 +52,8 @@ export interface Report {
   practiceName: string;
   address?: string;
   mapsUri?: string;
+  /** Website linked on the practice's Google listing */
+  website?: string;
   city: string;
   practiceType: PracticeType;
   /** Score out of 100 */

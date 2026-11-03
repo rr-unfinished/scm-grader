@@ -34,6 +34,25 @@ Without `GOOGLE_PLACES_API_KEY` the app falls back to sample data for everything
 
 Leads live in the Supabase **Table Editor → leads**. Rows include contact info, the full report, and `wants_call_at` when someone clicked "Book my free audit call". If a scan fails, the lead is still saved with `scan_error`.
 
+## Attio CRM
+
+With `ATTIO_API_KEY` set, every lead is sent to Attio after the scan:
+
+- **Company:** the practice, matched on its website domain (or the lead's work email domain), so repeat scans update the same company.
+- **Person:** matched on email, with name, role as job title, phone, and a link to the company.
+- **Note on the person:** score, category scores, top 5 fixes, Google map rank and the report link.
+- **Call request:** clicking "Book my free audit call" adds a second note, once.
+
+To set it up, in Attio go to **Workspace settings → Developers → Access tokens**, create a token named `scm-grader` with these scopes, and add it in Vercel as `ATTIO_API_KEY`:
+
+| Scope | Access |
+| --- | --- |
+| Records (`record_permission`) | Read-write |
+| Object configuration (`object_configuration`) | Read |
+| Notes (`note`) | Read-write |
+
+If Attio is down or rejects a request, the lead is still saved in Supabase and the emails still go out; the error is logged in Vercel.
+
 ## Run it locally
 
 You need Node 20 or newer.
@@ -71,6 +90,7 @@ lib/
   pagespeed.ts          Mobile load time from PageSpeed Insights
   site-scan.ts          Safe homepage fetch + website/AI-readiness analysis
   leads.ts              Saves leads and reports in Supabase; reads saved reports
+  attio.ts              Sends each lead to Attio (company, person, note)
   email.ts              Report email to the practice, lead alerts to South Coast (Resend)
   ai-check.ts           Asks ChatGPT for local recommendations and checks for the practice
   sample-report.ts      Sample data, used only when no Google key is set
