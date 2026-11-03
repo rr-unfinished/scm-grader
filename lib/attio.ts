@@ -16,7 +16,7 @@
  */
 import "server-only";
 import type { LeadInput } from "./leads";
-import { PRACTICE_TYPES } from "./practice-types";
+import { PRACTICE_TYPES, SOUTH_BAY_CITIES } from "./practice-types";
 import type { Report } from "./types";
 
 const BASE = process.env.ATTIO_BASE_URL || "https://api.attio.com/v2";
@@ -354,6 +354,31 @@ export async function attioStatus() {
     const slugs = await listSlugs();
     out.columnsMatched = Object.keys(slugs);
     out.columnsMissing = (Object.keys(COLUMNS) as Column[]).filter((k) => !slugs[k]).map((k) => COLUMNS[k]);
+    // For the two dropdown columns, show their type and options so mismatches are easy to spot.
+    const attrs = await call<{ data: { title: string; api_slug: string; type: string }[] }>(
+      "GET",
+      `/lists/${encodeURIComponent(LIST)}/attributes?limit=200`,
+    );
+    const dropdowns: Record<string, unknown> = {};
+    for (const key of ["city", "practiceType"] as Column[]) {
+      const slug = slugs[key];
+      const attr = attrs.data.find((x) => x.api_slug === slug);
+      if (!slug || !attr) continue;
+      const info: Record<string, unknown> = { type: attr.type };
+      if (attr.type === "select") {
+        const opts = await call<{ data: { title: string; is_archived: boolean }[] }>(
+          "GET",
+          `/lists/${encodeURIComponent(LIST)}/attributes/${slug}/options`,
+        );
+        const titles = opts.data.filter((o) => !o.is_archived).map((o) => o.title);
+        const expected =
+          key === "city" ? [...SOUTH_BAY_CITIES] : Object.values(PRACTICE_TYPES).map((t) => t.label);
+        info.options = titles;
+        info.missingOptions = expected.filter((x) => !titles.includes(x));
+      }
+      dropdowns[COLUMNS[key]] = info;
+    }
+    out.dropdowns = dropdowns;
   } catch (e) {
     out.listFound = false;
     out.listError = e instanceof AttioError ? `${e.status} ${e.body.slice(0, 160)}` : String(e);
