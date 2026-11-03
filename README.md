@@ -54,15 +54,24 @@ To set it up, in Attio go to **Workspace settings → Developers → Access toke
 | List entries (`list_entry`) | Read-write |
 | List configuration (`list_configuration`) | Read |
 
-For the list, create a **People** list (for example "Practice Grader Leads") with these attributes, then copy its API slug from the list's settings into `ATTIO_LIST`:
+For the list, create a **People** list (for example "Practice Grader Leads") and copy its API slug from the list's settings into `ATTIO_LIST`. The app reads the list's columns and fills any of these it finds, matched by name (capitals and spacing don't matter). Columns that don't exist are skipped.
 
-| Attribute | Type | Slug the app writes |
-| --- | --- | --- |
-| Stage | Status, with at least `New` and `Call requested` | `stage` |
-| Score | Number | `score` |
-| Report link | Text or URL | `report_link` |
+| Column | Type | Filled with | Updated on rescan |
+| --- | --- | --- | --- |
+| Stage | Status, with `New` and `Call requested` | `New` when added; `Call requested` on a call click | No |
+| Score | Number | Overall score out of 100 | Yes |
+| Report link | Text | Saved report URL | Yes |
+| Practice type | Select: Dental, Orthodontics, Medical clinic, Chiropractic, Med spa, Physical therapy | From the quiz | Yes |
+| City | Select, with the 16 South Bay cities | City searched from | Yes |
+| Google map rank | Number | Map position; empty if outside the top 20 | Yes |
+| Google search score | Number | Out of 25 | Yes |
+| Website score | Number | Out of 25; empty if the site blocked the scan | Yes |
+| Reviews score | Number | Out of 25 | Yes |
+| AI search score | Number | Out of 25; empty if not measured | Yes |
+| Last scanned | Date | Date of the latest scan (Pacific time) | Yes |
+| Call requested on | Date | Date of the call click | No |
 
-If your slugs differ, set `ATTIO_LIST_STAGE_ATTRIBUTE`, `ATTIO_LIST_SCORE_ATTRIBUTE` or `ATTIO_LIST_REPORT_ATTRIBUTE`. If Attio rejects a value, the person is still added to the list and the problem is logged.
+Select options must match the names above exactly. If Attio rejects a value, the rest still save and the rejected column is logged in Vercel.
 
 If Attio is down or rejects a request, the lead is still saved in Supabase and the emails still go out; the error is logged in Vercel.
 

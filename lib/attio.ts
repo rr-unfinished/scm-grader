@@ -6,8 +6,8 @@
  * 2. The person is created or updated as a Person, matched on email, and linked to the company.
  * 3. A note with the score, top fixes and report link is added to the person.
  * 4. If ATTIO_LIST is set, the person is added to that list at stage "New",
- *    with their score and report link. Repeat scans update the score and link
- *    but never move the stage back.
+ *    with their scores, practice type, city, map rank and report link.
+ *    Repeat scans update those values but never move the stage back.
  * A later "Book my free audit call" click adds a second note and moves the
  * list entry to "Call requested".
  *
@@ -16,6 +16,7 @@
  */
 import "server-only";
 import type { LeadInput } from "./leads";
+import { PRACTICE_TYPES } from "./practice-types";
 import type { Report } from "./types";
 
 const BASE = process.env.ATTIO_BASE_URL || "https://api.attio.com/v2";
@@ -107,12 +108,80 @@ async function upsertPerson(lead: LeadInput, companyId: string | null): Promise<
 /* ---------- List (pipeline) ---------- */
 
 const LIST = process.env.ATTIO_LIST || "";
-// Attribute slugs on the list. Attio makes them from the names you give them.
-const STAGE = process.env.ATTIO_LIST_STAGE_ATTRIBUTE || "stage";
-const SCORE = process.env.ATTIO_LIST_SCORE_ATTRIBUTE || "score";
-const REPORT = process.env.ATTIO_LIST_REPORT_ATTRIBUTE || "report_link";
 export const STAGE_NEW = "New";
 export const STAGE_CALL = "Call requested";
+
+/**
+ * List columns the app fills, matched by the name you gave them in Attio.
+ * Columns that don't exist on the list are skipped.
+ */
+const COLUMNS = {
+  stage: "Stage",
+  score: "Score",
+  report: "Report link",
+  practiceType: "Practice type",
+  city: "City",
+  mapRank: "Google map rank",
+  googleScore: "Google search score",
+  websiteScore: "Website score",
+  reviewsScore: "Reviews score",
+  aiScore: "AI search score",
+  lastScanned: "Last scanned",
+  callRequestedOn: "Call requested on",
+} as const;
+type Column = keyof typeof COLUMNS;
+
+const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
+// Looked up once per server instance; Attio column names rarely change.
+let slugCache: Promise<Partial<Record<Column, string>>> | null = null;
+
+function listSlugs(): Promise<Partial<Record<Column, string>>> {
+  if (!slugCache) {
+    slugCache = call<{ data: { title: string; api_slug: string; is_archived?: boolean }[] }>(
+      "GET",
+      `/lists/${encodeURIComponent(LIST)}/attributes?limit=200`,
+    )
+      .then((res) => {
+        const byTitle = new Map(res.data.filter((a) => !a.is_archived).map((a) => [norm(a.title), a.api_slug]));
+        const out: Partial<Record<Column, string>> = {};
+        for (const [key, title] of Object.entries(COLUMNS) as [Column, string][]) {
+          const slug = byTitle.get(norm(title));
+          if (slug) out[key] = slug;
+        }
+        return out;
+      })
+      .catch((e) => {
+        slugCache = null; // try again next time
+        throw e;
+      });
+  }
+  return slugCache;
+}
+
+/** Today's date in the South Bay, as Attio's YYYY-MM-DD. */
+const today = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
+
+function scanValues(report: Report | null, link: string | null): Partial<Record<Column, unknown>> {
+  const v: Partial<Record<Column, unknown>> = { lastScanned: today() };
+  if (link) v.report = link;
+  if (!report) return v;
+  const cat = (id: string) => report.categories.find((c) => c.id === id);
+  const catScore = (id: string) => {
+    const c = cat(id);
+    return c && !c.skipped ? c.score : undefined;
+  };
+  v.score = report.total;
+  v.practiceType = PRACTICE_TYPES[report.practiceType].label;
+  v.city = report.city;
+  const you = report.competitors.find((c) => c.isYou);
+  if (you?.rank) v.mapRank = you.rank;
+  v.googleScore = catScore("google");
+  v.websiteScore = catScore("web");
+  v.reviewsScore = catScore("reviews");
+  v.aiScore = catScore("ai");
+  return v;
+}
 
 async function findEntry(personId: string): Promise<string | null> {
   const res = await call<{ data: { list_id: string; list_api_slug: string; entry_id: string }[] }>(
@@ -123,36 +192,57 @@ async function findEntry(personId: string): Promise<string | null> {
   return hit?.entry_id ?? null;
 }
 
-/** Writes values; if Attio rejects them (say, an attribute doesn't exist), keeps the entry and logs it. */
-async function writeEntry(entryId: string | null, personId: string, values: Record<string, unknown>) {
-  const path = entryId ? `/lists/${encodeURIComponent(LIST)}/entries/${entryId}` : `/lists/${encodeURIComponent(LIST)}/entries`;
-  const send = (v: Record<string, unknown>) =>
-    entryId
-      ? call("PATCH", path, { data: { entry_values: v } })
-      : call("POST", path, { data: { parent_record_id: personId, parent_object: "people", entry_values: v } });
+/**
+ * Writes the values that have a matching column. If Attio rejects the batch
+ * (say, a select option name doesn't match), it retries one column at a time
+ * so the good values still land, and logs the ones that didn't.
+ */
+async function writeEntry(entryId: string | null, personId: string, values: Partial<Record<Column, unknown>>) {
+  const slugs = await listSlugs();
+  const entryValues: Record<string, unknown> = {};
+  for (const [key, val] of Object.entries(values) as [Column, unknown][]) {
+    if (val !== undefined && slugs[key]) entryValues[slugs[key]!] = val;
+  }
+  const base = `/lists/${encodeURIComponent(LIST)}/entries`;
+  let id = entryId;
+  const send = async (v: Record<string, unknown>) => {
+    if (id) return call("PATCH", `${base}/${id}`, { data: { entry_values: v } });
+    const res = await call<{ data: { id: { entry_id: string } } }>("POST", base, {
+      data: { parent_record_id: personId, parent_object: "people", entry_values: v },
+    });
+    id = res.data.id.entry_id;
+    return res;
+  };
   try {
-    await send(values);
+    await send(entryValues);
   } catch (e) {
     if (!(e instanceof AttioError) || e.status !== 400) throw e;
-    console.error(`[attio] list values rejected (${e.body.slice(0, 200)}); check the list's attributes`);
-    if (!entryId) await send({}); // still put them on the list
+    if (!id) await send({}); // still put them on the list
+    const rejected: string[] = [];
+    for (const [slug, val] of Object.entries(entryValues)) {
+      try {
+        await send({ [slug]: val });
+      } catch (err) {
+        if (err instanceof AttioError && err.status === 400) rejected.push(`${slug}=${JSON.stringify(val)}`);
+        else throw err;
+      }
+    }
+    if (rejected.length) console.error(`[attio] list values rejected: ${rejected.join(", ")}`);
   }
 }
 
 async function addToList(personId: string, report: Report | null, link: string | null) {
   if (!LIST) return;
-  const values: Record<string, unknown> = {};
-  if (report) values[SCORE] = report.total;
-  if (link) values[REPORT] = link;
   const entryId = await findEntry(personId);
+  const values = scanValues(report, link);
   // New entries start at "New"; existing ones keep whatever stage you've moved them to.
-  await writeEntry(entryId, personId, entryId ? values : { ...values, [STAGE]: STAGE_NEW });
+  await writeEntry(entryId, personId, entryId ? values : { ...values, stage: STAGE_NEW });
 }
 
 async function moveToCallRequested(personId: string, link: string) {
   if (!LIST) return;
   const entryId = await findEntry(personId);
-  await writeEntry(entryId, personId, { [STAGE]: STAGE_CALL, [REPORT]: link });
+  await writeEntry(entryId, personId, { stage: STAGE_CALL, report: link, callRequestedOn: today() });
 }
 
 async function addNote(personId: string, title: string, content: string) {
