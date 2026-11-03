@@ -144,7 +144,11 @@ function listSlugs(): Promise<Partial<Record<Column, string>>> {
       `/lists/${encodeURIComponent(LIST)}/attributes?limit=200`,
     )
       .then((res) => {
-        const byTitle = new Map(res.data.filter((a) => !a.is_archived).map((a) => [norm(a.title), a.api_slug]));
+        // Attio returns columns in the order shown in the app; the first match wins.
+        const byTitle = new Map<string, string>();
+        for (const a of res.data.filter((x) => !x.is_archived)) {
+          if (!byTitle.has(norm(a.title))) byTitle.set(norm(a.title), a.api_slug);
+        }
         const out: Partial<Record<Column, string>> = {};
         for (const [key, title] of Object.entries(COLUMNS) as [Column, string][]) {
           const slug = byTitle.get(norm(title));
@@ -439,6 +443,16 @@ export async function attioStatus() {
       dropdowns[COLUMNS[key]] = info;
     }
     out.dropdowns = dropdowns;
+    // Two columns with the same name means values may land in the one you aren't looking at.
+    const counts = new Map<string, string[]>();
+    for (const x of attrs.data) {
+      const k = norm(x.title);
+      counts.set(k, [...(counts.get(k) ?? []), x.api_slug]);
+    }
+    const wanted = new Set(Object.values(COLUMNS).map(norm));
+    out.duplicateColumns = [...counts.entries()]
+      .filter(([k, v]) => v.length > 1 && wanted.has(k))
+      .map(([k, v]) => ({ name: k, slugs: v, appWritesTo: v[0] }));
   } catch (e) {
     out.listFound = false;
     out.listError = e instanceof AttioError ? `${e.status} ${e.body.slice(0, 160)}` : String(e);
