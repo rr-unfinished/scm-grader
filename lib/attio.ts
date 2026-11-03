@@ -107,7 +107,8 @@ async function upsertPerson(lead: LeadInput, companyId: string | null): Promise<
 
 /* ---------- List (pipeline) ---------- */
 
-const LIST = process.env.ATTIO_LIST || "";
+// Accepts "scm_grader", "/scm_grader" or a pasted URL path ending in the slug.
+const LIST = (process.env.ATTIO_LIST || "").trim().replace(/^\/+|\/+$/g, "").split("/").pop() || "";
 export const STAGE_NEW = "New";
 export const STAGE_CALL = "Call requested";
 
@@ -316,4 +317,46 @@ export async function noteCallRequest(lead: LeadInput, practiceName: string, lin
   } catch (e) {
     console.error("[attio] call note failed:", e instanceof AttioError ? `${e.status} ${e.body}` : e);
   }
+}
+
+/**
+ * Read-only checks for /api/health: is the token valid, which workspace and
+ * permissions does it have, can it see the list, and which columns match.
+ * Never returns the token itself.
+ */
+export async function attioStatus() {
+  if (!attioConfigured()) return { configured: false };
+  const out: Record<string, unknown> = { configured: true, listSet: Boolean(LIST), listSlug: LIST || null };
+  try {
+    const self = await call<{ active: boolean; scope?: string; workspace_name?: string }>("GET", "/self");
+    out.tokenActive = self.active;
+    out.workspace = self.workspace_name ?? null;
+    const scopes = (self.scope ?? "").split(" ").filter(Boolean);
+    const need = ["record_permission:read-write", "object_configuration:read", "note:read-write", "list_entry:read-write", "list_configuration:read"];
+    out.missingScopes = need.filter((n) => {
+      const [k, lvl] = n.split(":");
+      return !scopes.some((sc) => sc === n || (lvl === "read" && sc === `${k}:read-write`));
+    });
+  } catch (e) {
+    out.tokenError = e instanceof AttioError ? `${e.status} ${e.body.slice(0, 120)}` : String(e);
+    return out;
+  }
+  if (!LIST) return out;
+  try {
+    const list = await call<{ data: { api_slug: string; name: string; parent_object: string[] } }>(
+      "GET",
+      `/lists/${encodeURIComponent(LIST)}`,
+    );
+    out.listFound = true;
+    out.listName = list.data.name;
+    out.listObject = list.data.parent_object;
+    slugCache = null;
+    const slugs = await listSlugs();
+    out.columnsMatched = Object.keys(slugs);
+    out.columnsMissing = (Object.keys(COLUMNS) as Column[]).filter((k) => !slugs[k]).map((k) => COLUMNS[k]);
+  } catch (e) {
+    out.listFound = false;
+    out.listError = e instanceof AttioError ? `${e.status} ${e.body.slice(0, 160)}` : String(e);
+  }
+  return out;
 }

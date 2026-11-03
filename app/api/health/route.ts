@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { openaiConfigured } from "@/lib/ai-check";
-import { attioConfigured } from "@/lib/attio";
+import { attioConfigured, attioStatus } from "@/lib/attio";
 import { emailConfigured } from "@/lib/email";
 import { placesConfigured } from "@/lib/google-places";
 import { leadsConfigured, supabaseBase } from "@/lib/leads";
@@ -8,7 +8,7 @@ import { leadsConfigured, supabaseBase } from "@/lib/leads";
 export const dynamic = "force-dynamic";
 
 /** Which services are connected. Reports yes/no only, never key values. */
-export function GET() {
+export async function GET(request: Request) {
   const supabaseUrl = supabaseBase();
   const supaKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
   return NextResponse.json({
@@ -21,5 +21,7 @@ export function GET() {
     resendFromSet: Boolean(process.env.RESEND_FROM),
     leadNotifySet: Boolean(process.env.LEAD_NOTIFY_EMAIL),
     attio: attioConfigured(),
+    // ?attio=1 runs read-only checks against Attio (token, workspace, list, columns).
+    ...(new URL(request.url).searchParams.get("attio") ? { attioDetails: await attioStatus() } : {}),
   });
 }
