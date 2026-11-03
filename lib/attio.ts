@@ -225,13 +225,29 @@ function selectOptions(): Promise<Record<string, string[]>> {
   return optionCache;
 }
 
-async function writeEntry(entryId: string | null, personId: string, values: Partial<Record<Column, unknown>>) {
+export interface ListWrite {
+  entry: "created" | "updated";
+  sent: Record<string, unknown>;
+  skipped: string[];
+  rejected: string[];
+}
+
+async function writeEntry(
+  entryId: string | null,
+  personId: string,
+  values: Partial<Record<Column, unknown>>,
+): Promise<ListWrite> {
+  const skipped: string[] = [];
   const slugs = await listSlugs();
   const options = await selectOptions().catch(() => ({}) as Record<string, string[]>);
   const entryValues: Record<string, unknown> = {};
   for (const [key, val] of Object.entries(values) as [Column, unknown][]) {
     const slug = slugs[key];
-    if (val === undefined || !slug) continue;
+    if (val === undefined) continue;
+    if (!slug) {
+      skipped.push(`${COLUMNS[key]}: no column with this name`);
+      continue;
+    }
     const opts = options[slug];
     if (opts && typeof val === "string") {
       // Dropdown: use the option's exact title ("Medical Clinic" for "Medical clinic"),
@@ -239,6 +255,7 @@ async function writeEntry(entryId: string | null, personId: string, values: Part
       const match = opts.find((o) => norm(o) === norm(val));
       if (!match) {
         console.error(`[attio] no "${val}" option in ${slug}; add it to the column in Attio`);
+        skipped.push(`${COLUMNS[key]}: no "${val}" option`);
         continue;
       }
       entryValues[slug] = [match];
@@ -256,30 +273,31 @@ async function writeEntry(entryId: string | null, personId: string, values: Part
     id = res.data.id.entry_id;
     return res;
   };
+  const rejected: string[] = [];
   try {
     await send(entryValues);
   } catch (e) {
     if (!(e instanceof AttioError) || e.status !== 400) throw e;
     if (!id) await send({}); // still put them on the list
-    const rejected: string[] = [];
     for (const [slug, val] of Object.entries(entryValues)) {
       try {
         await send({ [slug]: val });
       } catch (err) {
-        if (err instanceof AttioError && err.status === 400) rejected.push(`${slug}=${JSON.stringify(val)}`);
+        if (err instanceof AttioError && err.status === 400) rejected.push(`${slug}=${JSON.stringify(val)}: ${err.body.slice(0, 200)}`);
         else throw err;
       }
     }
     if (rejected.length) console.error(`[attio] list values rejected: ${rejected.join(", ")}`);
   }
+  return { entry: entryId ? "updated" : "created", sent: entryValues, skipped, rejected };
 }
 
-async function addToList(personId: string, report: Report | null, link: string | null) {
-  if (!LIST) return;
+async function addToList(personId: string, report: Report | null, link: string | null): Promise<ListWrite | null> {
+  if (!LIST) return null;
   const entryId = await findEntry(personId);
   const values = scanValues(report, link);
   // New entries start at "New"; existing ones keep whatever stage you've moved them to.
-  await writeEntry(entryId, personId, entryId ? values : { ...values, stage: STAGE_NEW });
+  return writeEntry(entryId, personId, entryId ? values : { ...values, stage: STAGE_NEW });
 }
 
 async function moveToCallRequested(personId: string, link: string) {
@@ -329,7 +347,7 @@ export async function syncLeadToAttio(opts: {
   report: Report | null;
   link: string | null;
   scanError?: string;
-}): Promise<{ ok: true; personId: string } | { ok: false; error: string }> {
+}): Promise<{ ok: true; personId: string; list: ListWrite | null } | { ok: false; error: string }> {
   try {
     const companyId = await upsertCompany(opts.practiceName, practiceDomain(opts.report?.website, opts.lead.email));
     const personId = await upsertPerson(opts.lead, companyId);
@@ -337,8 +355,8 @@ export async function syncLeadToAttio(opts: {
       ? `Practice Grader: ${opts.practiceName} scored ${opts.report.total}/100`
       : `Practice Grader: ${opts.practiceName} (scan failed)`;
     await addNote(personId, title, reportNote(opts.lead, opts.report, opts.link, opts.practiceName, opts.city, opts.scanError));
-    await addToList(personId, opts.report, opts.link);
-    return { ok: true, personId };
+    const list = await addToList(personId, opts.report, opts.link);
+    return { ok: true, personId, list };
   } catch (e) {
     const error = e instanceof AttioError ? `${e.status} ${e.body.slice(0, 160)}` : e instanceof Error ? e.message : String(e);
     console.error("[attio] sync failed:", error);

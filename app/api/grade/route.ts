@@ -65,7 +65,9 @@ export async function POST(request: Request) {
     }
   }
 
-  const reportId = await recordLead({ lead, req, report, origin });
+  // debugCrm: wait for the Attio update and report what it sent (only for this lead).
+  const debugCrm = (body as { debugCrm?: unknown }).debugCrm === true;
+  const { reportId, crm } = await recordLead({ lead, req, report, origin, debugCrm });
   const diagnostics = [...(report.diagnostics ?? [])];
   if (!reportId) diagnostics.push(leadsConfigured() ? `leads: ${lastLeadError ?? "save failed"}` : "leads: not configured");
   return NextResponse.json({
@@ -73,6 +75,7 @@ export async function POST(request: Request) {
     reportId,
     emailed: Boolean(reportId && emailConfigured()),
     ...(diagnostics.length ? { diagnostics } : {}),
+    ...(debugCrm ? { crm } : {}),
   });
 }
 
@@ -83,8 +86,9 @@ async function recordLead(opts: {
   report: Report | null;
   scanError?: string;
   origin: string;
-}): Promise<string | null> {
-  const { lead, req, report, scanError, origin } = opts;
+  debugCrm?: boolean;
+}): Promise<{ reportId: string | null; crm?: unknown }> {
+  const { lead, req, report, scanError, origin, debugCrm } = opts;
   const reportId = leadsConfigured()
     ? await saveLead({
         lead,
@@ -99,6 +103,10 @@ async function recordLead(opts: {
   const link = reportId ? `${origin}/r/${reportId}` : null;
 
   const practiceName = report?.practiceName ?? req.practiceName;
+  const crm =
+    debugCrm && attioConfigured()
+      ? await syncLeadToAttio({ lead, practiceName, city: req.city, report, link, scanError })
+      : undefined;
   if (emailConfigured() || attioConfigured()) {
     // Emails and the CRM run after the response, in parallel, so the scan isn't slower.
     after(async () => {
@@ -107,11 +115,11 @@ async function recordLead(opts: {
         emailConfigured()
           ? sendLeadNotification({ lead, practiceName, city: req.city, report, link, scanError })
           : Promise.resolve(false),
-        attioConfigured()
+        attioConfigured() && !debugCrm
           ? syncLeadToAttio({ lead, practiceName, city: req.city, report, link, scanError })
           : Promise.resolve(null),
       ]);
     });
   }
-  return reportId;
+  return { reportId, crm };
 }
