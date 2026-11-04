@@ -285,10 +285,10 @@ function StartView(props: {
               <div><span>AI search</span><b>11/25</b></div>
             </div>
           </div>
-          <div className="ai-chip">
-            <SparkleIcon />
-            <span>Includes your AI search visibility</span>
-          </div>
+          <p className="ai-note">
+            <SparkleIcon color="#0E6B75" size={16} />
+            <span>Every report includes your AI search visibility.</span>
+          </p>
         </aside>
       </div>
     </section>

@@ -124,7 +124,9 @@ input:focus, select:focus { outline: 2px solid var(--teal); outline-offset: 1px;
 .mini-cats div { display: flex; justify-content: space-between; gap: 10px; border-bottom: 1px solid var(--line); padding-bottom: 7px; }
 .mini-cats div:last-child { border-bottom: 0; padding-bottom: 0; }
 .mini-cats b { font-weight: 800; color: var(--navy); font-variant-numeric: tabular-nums; }
-.ai-chip { display: flex; align-items: center; gap: 10px; background: var(--navy); color: #fff; border-radius: 14px; padding: 14px 18px; align-self: flex-start; font-size: 14px; font-weight: 600; }
+/* A plain caption, not a button: no fill, no border, regular weight. */
+.ai-note { display: flex; align-items: center; gap: 8px; margin: 0; padding-inline: 4px; color: var(--body); font-size: 14px; font-weight: 500; cursor: default; }
+.ai-note svg { flex: none; }
 
 /* Quiz */
 .card { background: #fff; border: 1px solid var(--line); border-radius: 24px; padding: 36px; display: flex; flex-direction: column; gap: 22px; max-width: 580px; width: 100%; margin: 0 auto; box-shadow: 0 24px 60px rgba(11, 46, 99, 0.08); }
