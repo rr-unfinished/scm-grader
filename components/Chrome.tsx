@@ -4,7 +4,7 @@ export function SiteHeader() {
   return (
     <header className="top">
       <div className="wrap">
-        <a className="brand" href="/">
+        <a className="brand" href="https://www.southcoastmarketing.com" aria-label="South Coast Marketing">
           <img src="/logo-color.png" alt="" />
           <span className="wm">
             <b>South Coast</b>
@@ -20,7 +20,7 @@ export function SiteFooter() {
   return (
     <footer>
       <div className="wrap">
-        <a className="fb" href="/" aria-label="South Coast Marketing home">
+        <a className="fb" href="https://www.southcoastmarketing.com" aria-label="South Coast Marketing">
           <img src="/logo-white.png" alt="" />
           <span className="wm">
             <b>South Coast</b>
