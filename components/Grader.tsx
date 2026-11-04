@@ -22,6 +22,21 @@ export interface Lead {
 const EMPTY_LEAD: Lead = { firstName: "", lastName: "", role: "", email: "", phone: "" };
 const ROLES = ["Owner / doctor", "Office manager", "Marketing", "Other"];
 
+/**
+ * Formats a US phone number as it's typed: "310" -> "(310) 800" -> "(310) 800-5459".
+ * Accepts pasted "+1 310-800-5459". If a backspace only removed a ")" or "-",
+ * it removes the digit before it too, so deleting never gets stuck.
+ */
+export function formatPhoneInput(next: string, prev: string): string {
+  const digitsOf = (v: string) => v.replace(/\D/g, "").replace(/^1(?=\d{10})/, "");
+  let d = digitsOf(next);
+  if (next.length < prev.length && d === digitsOf(prev)) d = d.slice(0, -1);
+  d = d.slice(0, 10);
+  if (d.length <= 3) return d;
+  if (d.length <= 6) return `(${d.slice(0, 3)}) ${d.slice(3)}`;
+  return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`;
+}
+
 function newToken() {
   try {
     return crypto.randomUUID();
@@ -356,7 +371,15 @@ function QuizView(props: {
             </label>
             <label htmlFor="in-phone">
               Mobile phone
-              <input id="in-phone" type="tel" autoComplete="tel" value={lead.phone} onChange={(e) => props.onLead({ phone: e.target.value })} />
+              <input
+                id="in-phone"
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                placeholder="(310) 555-0123"
+                value={lead.phone}
+                onChange={(e) => props.onLead({ phone: formatPhoneInput(e.target.value, lead.phone) })}
+              />
             </label>
             <p className="fine">
               By continuing you agree that South Coast Marketing may contact you about your report. Message and data rates may apply.
