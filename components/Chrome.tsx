@@ -11,7 +11,6 @@ export function SiteHeader() {
             <span>MARKETING</span>
           </span>
         </a>
-        <span className="pill">Practice Grader</span>
       </div>
     </header>
   );
