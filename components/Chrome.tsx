@@ -1,5 +1,5 @@
 /* eslint-disable @next/next/no-img-element */
-import { CONTACT_EMAIL, CONTACT_PHONE } from "@/lib/site";
+import { CONTACT_EMAIL, CONTACT_EMAIL_HREF, CONTACT_PHONE, CONTACT_PHONE_HREF } from "@/lib/site";
 export function SiteHeader() {
   return (
     <header className="top">
@@ -21,17 +21,16 @@ export function SiteFooter() {
   return (
     <footer>
       <div className="wrap">
-        <div className="fb">
+        <a className="fb" href="/" aria-label="South Coast Marketing home">
           <img src="/logo-white.png" alt="" />
-          <div>
-            <b>South Coast Marketing</b>
-            <span>Get found. Get chosen.</span>
-          </div>
-        </div>
+          <span className="wm">
+            <b>South Coast</b>
+            <span>MARKETING</span>
+          </span>
+        </a>
         <div className="fl">
-          <span>Serving the South Bay</span>
-          <span>{CONTACT_PHONE}</span>
-          <span>{CONTACT_EMAIL}</span>
+          {CONTACT_PHONE_HREF ? <a href={CONTACT_PHONE_HREF}>{CONTACT_PHONE}</a> : <span>{CONTACT_PHONE}</span>}
+          {CONTACT_EMAIL_HREF ? <a href={CONTACT_EMAIL_HREF}>{CONTACT_EMAIL}</a> : <span>{CONTACT_EMAIL}</span>}
           <a href="/privacy">Privacy policy</a>
         </div>
       </div>
