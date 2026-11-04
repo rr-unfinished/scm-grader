@@ -15,7 +15,7 @@
  * instead of creating duplicates.
  */
 import "server-only";
-import type { LeadInput } from "./leads";
+import { practiceKey, practiceKeysForReports, type LeadInput } from "./leads";
 import { PRACTICE_TYPES, SOUTH_BAY_CITIES } from "./practice-types";
 import type { Report } from "./types";
 
@@ -188,13 +188,34 @@ function scanValues(report: Report | null, link: string | null): Partial<Record<
   return v;
 }
 
-async function findEntry(personId: string): Promise<string | null> {
+/**
+ * The person's row in the list for this practice, if any. A person can have
+ * one row per practice; rows are told apart by the report their link points to.
+ */
+async function findEntry(personId: string, key: string): Promise<string | null> {
   const res = await call<{ data: { list_id: string; list_api_slug: string; entry_id: string }[] }>(
     "GET",
     `/objects/people/records/${personId}/entries?limit=1000`,
   );
-  const hit = res.data.find((e) => e.list_api_slug === LIST || e.list_id === LIST);
-  return hit?.entry_id ?? null;
+  const ids = res.data.filter((e) => e.list_api_slug === LIST || e.list_id === LIST).map((e) => e.entry_id);
+  if (ids.length === 0) return null;
+
+  const reportSlug = (await listSlugs()).report;
+  if (!reportSlug) return ids[0]; // no Report link column: fall back to one row per person
+  const reportIds: Record<string, string> = {};
+  await Promise.all(
+    ids.map(async (id) => {
+      const entry = await call<{ data: { entry_values: Record<string, { value?: string }[]> } }>(
+        "GET",
+        `/lists/${encodeURIComponent(LIST)}/entries/${id}`,
+      );
+      const link = entry.data.entry_values[reportSlug]?.[0]?.value ?? "";
+      const m = link.match(/\/r\/([0-9a-f-]{36})/i);
+      if (m) reportIds[id] = m[1];
+    }),
+  );
+  const keys = await practiceKeysForReports(Object.values(reportIds));
+  return ids.find((id) => reportIds[id] && keys[reportIds[id]] === key) ?? null;
 }
 
 /**
@@ -296,17 +317,22 @@ async function writeEntry(
   return { entry: entryId ? "updated" : "created", sent: entryValues, skipped, rejected };
 }
 
-async function addToList(personId: string, report: Report | null, link: string | null): Promise<ListWrite | null> {
+async function addToList(
+  personId: string,
+  report: Report | null,
+  link: string | null,
+  key: string,
+): Promise<ListWrite | null> {
   if (!LIST) return null;
-  const entryId = await findEntry(personId);
+  const entryId = await findEntry(personId, key);
   const values = scanValues(report, link);
   // New entries start at "New"; existing ones keep whatever stage you've moved them to.
   return writeEntry(entryId, personId, entryId ? values : { ...values, stage: STAGE_NEW });
 }
 
-async function moveToCallRequested(personId: string, link: string) {
+async function moveToCallRequested(personId: string, link: string, key: string) {
   if (!LIST) return;
-  const entryId = await findEntry(personId);
+  const entryId = await findEntry(personId, key);
   await writeEntry(entryId, personId, { stage: STAGE_CALL, report: link, callRequestedOn: today() });
 }
 
@@ -351,6 +377,7 @@ export async function syncLeadToAttio(opts: {
   report: Report | null;
   link: string | null;
   scanError?: string;
+  placeId?: string;
 }): Promise<{ ok: true; personId: string; list: ListWrite | null } | { ok: false; error: string }> {
   try {
     const companyId = await upsertCompany(opts.practiceName, practiceDomain(opts.report?.website, opts.lead.email));
@@ -359,7 +386,7 @@ export async function syncLeadToAttio(opts: {
       ? `Practice Grader: ${opts.practiceName} scored ${opts.report.total}/100`
       : `Practice Grader: ${opts.practiceName} (scan failed)`;
     await addNote(personId, title, reportNote(opts.lead, opts.report, opts.link, opts.practiceName, opts.city, opts.scanError));
-    const list = await addToList(personId, opts.report, opts.link);
+    const list = await addToList(personId, opts.report, opts.link, practiceKey(opts.placeId, opts.practiceName));
     return { ok: true, personId, list };
   } catch (e) {
     const error = e instanceof AttioError ? `${e.status} ${e.body.slice(0, 160)}` : e instanceof Error ? e.message : String(e);
@@ -369,7 +396,7 @@ export async function syncLeadToAttio(opts: {
 }
 
 /** Adds a "wants a call" note to the person (matched by email). Never throws. */
-export async function noteCallRequest(lead: LeadInput, practiceName: string, link: string) {
+export async function noteCallRequest(lead: LeadInput, practiceName: string, link: string, placeId?: string | null) {
   try {
     const personId = await upsertPerson(lead, null);
     await addNote(
@@ -377,7 +404,7 @@ export async function noteCallRequest(lead: LeadInput, practiceName: string, lin
       `Requested a free audit call: ${practiceName}`,
       `${lead.firstName} clicked "Book my free audit call" on their Practice Grader report.\n\nPhone: ${lead.phone}\nEmail: ${lead.email}\nReport: ${link}`,
     );
-    await moveToCallRequested(personId, link);
+    await moveToCallRequested(personId, link, practiceKey(placeId, practiceName));
   } catch (e) {
     console.error("[attio] call note failed:", e instanceof AttioError ? `${e.status} ${e.body}` : e);
   }

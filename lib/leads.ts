@@ -22,6 +22,7 @@ export interface SavedLead extends LeadInput {
   createdAt: string;
   practiceName: string;
   city: string;
+  placeId: string | null;
   report: Report | null;
 }
 
@@ -149,6 +150,7 @@ interface Row {
   phone: string;
   practice_name: string;
   city: string;
+  place_id: string | null;
   report: Report | null;
 }
 
@@ -156,7 +158,7 @@ export async function getLead(id: string): Promise<SavedLead | null> {
   if (!leadsConfigured() || !isReportId(id)) return null;
   try {
     const res = await fetch(
-      url(`leads?id=eq.${id}&select=id,created_at,first_name,last_name,role,email,phone,practice_name,city,report`),
+      url(`leads?id=eq.${id}&select=id,created_at,first_name,last_name,role,email,phone,practice_name,city,place_id,report`),
       { headers: headers(), signal: AbortSignal.timeout(8000), cache: "no-store" },
     );
     if (!res.ok) return null;
@@ -172,10 +174,33 @@ export async function getLead(id: string): Promise<SavedLead | null> {
       phone: row.phone,
       practiceName: row.practice_name,
       city: row.city,
+      placeId: row.place_id,
       report: row.report,
     };
   } catch {
     return null;
+  }
+}
+
+/** Identifies a practice: its Google place ID, or its name when there's no place ID. */
+export const practiceKey = (placeId: string | null | undefined, practiceName: string) =>
+  placeId ? `place:${placeId}` : `name:${practiceName.trim().toLowerCase()}`;
+
+/** Practice keys for several saved reports at once, by report ID. */
+export async function practiceKeysForReports(ids: string[]): Promise<Record<string, string>> {
+  const valid = ids.filter(isReportId);
+  if (!leadsConfigured() || valid.length === 0) return {};
+  try {
+    const res = await fetch(url(`leads?id=in.(${valid.join(",")})&select=id,place_id,practice_name`), {
+      headers: headers(),
+      signal: AbortSignal.timeout(8000),
+      cache: "no-store",
+    });
+    if (!res.ok) return {};
+    const rows = (await res.json()) as { id: string; place_id: string | null; practice_name: string }[];
+    return Object.fromEntries(rows.map((r) => [r.id, practiceKey(r.place_id, r.practice_name)]));
+  } catch {
+    return {};
   }
 }
 

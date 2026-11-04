@@ -37,7 +37,7 @@ export async function POST(request: Request) {
               wantsCall: true,
             })
           : Promise.resolve(false),
-        attioConfigured() ? noteCallRequest(lead, lead.practiceName, link) : Promise.resolve(),
+        attioConfigured() ? noteCallRequest(lead, lead.practiceName, link, lead.placeId) : Promise.resolve(),
       ]);
     });
   }

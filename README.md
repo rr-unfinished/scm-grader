@@ -42,7 +42,7 @@ With `ATTIO_API_KEY` set, every lead is sent to Attio after the scan:
 - **Person:** matched on email, with name, role as job title, phone, and a link to the company.
 - **Note on the person:** score, category scores, top 5 fixes, Google map rank and the report link.
 - **Call request:** clicking "Book my free audit call" adds a second note, once, and moves the list entry to Call requested.
-- **List (optional):** with `ATTIO_LIST` set, each person is added to that list at stage New with their score and report link. A repeat scan updates the score and link but leaves the stage alone, so it never undoes your pipeline moves.
+- **List (optional):** with `ATTIO_LIST` set, each person gets one row per practice they scan, starting at stage New. Rescanning the same practice updates that row's values but leaves the stage alone, so it never undoes your pipeline moves. A different practice from the same person gets a new row. Rows are matched to practices through their Report link, so keep that column.
 
 To set it up, in Attio go to **Workspace settings → Developers → Access tokens**, create a token named `scm-grader` with these scopes, and add it in Vercel as `ATTIO_API_KEY`:
 

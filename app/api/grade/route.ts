@@ -122,7 +122,7 @@ async function recordLead(opts: {
   const practiceName = report?.practiceName ?? req.practiceName;
   const crm =
     debugCrm && attioConfigured()
-      ? await syncLeadToAttio({ lead, practiceName, city: req.city, report, link, scanError })
+      ? await syncLeadToAttio({ lead, practiceName, city: req.city, report, link, scanError, placeId: req.placeId })
       : undefined;
   if (emailConfigured() || attioConfigured()) {
     // Emails and the CRM run after the response, in parallel, so the scan isn't slower.
@@ -133,7 +133,7 @@ async function recordLead(opts: {
           ? sendLeadNotification({ lead, practiceName, city: req.city, report, link, scanError })
           : Promise.resolve(false),
         attioConfigured() && !debugCrm
-          ? syncLeadToAttio({ lead, practiceName, city: req.city, report, link, scanError })
+          ? syncLeadToAttio({ lead, practiceName, city: req.city, report, link, scanError, placeId: req.placeId })
           : Promise.resolve(null),
       ]);
     });
