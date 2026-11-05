@@ -22,6 +22,8 @@ export const metadata: Metadata = {
   title: TITLE,
   description: DESCRIPTION,
   alternates: { canonical: "/" },
+  // Google Search Console ownership check
+  verification: { google: "LzyBDOtw3N6FX52I-tTvI3SCNJQwAS6Cl8uC5jMZMXo" },
   icons: { icon: "/logo-color.png", apple: "/logo-color.png" },
   openGraph: {
     type: "website",
