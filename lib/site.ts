@@ -15,3 +15,7 @@ export const CONTACT_PHONE = process.env.NEXT_PUBLIC_CONTACT_PHONE ? formatPhone
 const phoneDigits = (process.env.NEXT_PUBLIC_CONTACT_PHONE ?? "").replace(/\D/g, "").replace(/^1(?=\d{10}$)/, "");
 export const CONTACT_PHONE_HREF = phoneDigits.length === 10 ? `tel:+1${phoneDigits}` : null;
 export const CONTACT_EMAIL_HREF = clean(process.env.NEXT_PUBLIC_CONTACT_EMAIL).includes("@") ? `mailto:${clean(process.env.NEXT_PUBLIC_CONTACT_EMAIL)}` : null;
+
+/** Google Analytics 4 measurement ID. NEXT_PUBLIC_GA_ID overrides it; set it to "off" to disable. */
+export const GA_ID = (process.env.NEXT_PUBLIC_GA_ID || "G-FM4HLLK9HV").trim();
+export const GA_ENABLED = /^G-[A-Z0-9]+$/.test(GA_ID);

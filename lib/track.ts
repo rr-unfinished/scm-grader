@@ -3,6 +3,8 @@
  * Never include names, emails or phone numbers here: they'd go to Google.
  * Events sent before gtag.js finishes loading are queued and sent once it does.
  */
+import { GA_ENABLED } from "./site";
+
 type Params = Record<string, string | number | boolean | undefined>;
 
 declare global {
@@ -13,7 +15,7 @@ declare global {
 }
 
 export function track(event: string, params: Params = {}) {
-  if (typeof window === "undefined" || !process.env.NEXT_PUBLIC_GA_ID) return;
+  if (typeof window === "undefined" || !GA_ENABLED) return;
   if (window.gtag) {
     window.gtag("event", event, params);
     return;

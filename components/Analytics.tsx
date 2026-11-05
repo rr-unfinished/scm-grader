@@ -1,8 +1,6 @@
 import Script from "next/script";
 
-/** Google Analytics 4 measurement ID (starts with G-). Off until it's set. */
-const GA_ID = (process.env.NEXT_PUBLIC_GA_ID || "").trim();
-const enabled = /^G-[A-Z0-9]+$/.test(GA_ID);
+import { GA_ENABLED as enabled, GA_ID } from "@/lib/site";
 
 /** Google's standard gtag.js snippet, loaded after the page becomes interactive. */
 export function GoogleAnalytics() {
