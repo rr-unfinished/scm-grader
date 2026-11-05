@@ -71,7 +71,7 @@ export default function Privacy() {
             <li><b>Google</b> provides practice listings and website speed results.</li>
             <li><b>OpenAI</b> answers the AI search questions. We send it only your practice type and city, never your name, email or phone.</li>
             <li><b>Cloudflare</b> checks that visitors aren&apos;t bots.</li>
-            <li><b>Google Analytics and Google Tag Manager</b> measure how visitors use the grader, using cookies. We don&apos;t send them your name, email or phone.</li>
+            <li><b>Google Analytics</b> measures how visitors use the grader, using cookies. We don&apos;t send them your name, email or phone.</li>
           </ul>
           <p>
             We may also share information if the law requires it, or as part of a sale or merger of our business.

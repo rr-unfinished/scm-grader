@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { GtmHead, GtmNoScript } from "@/components/Analytics";
+import { GoogleAnalytics } from "@/components/Analytics";
 
 const SITE = (process.env.SITE_URL || "https://grader.southcoastmarketing.com").replace(/\/$/, "");
 
@@ -53,9 +53,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body>
-        <GtmNoScript />
         {children}
-        <GtmHead />
+        <GoogleAnalytics />
       </body>
     </html>
   );
