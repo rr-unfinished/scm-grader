@@ -231,7 +231,7 @@ function StartView(props: {
       <div className="hero">
         <div>
           <div className="eyebrow">Free for South Bay dental &amp; medical practices</div>
-          <h1>See how patients find you online.</h1>
+          <h1>See how South Bay patients find you online.</h1>
           <p className="lede">
             Enter your practice name and get your online health score in under a minute. We check your Google ranking,
             website, reviews, and AI search.
