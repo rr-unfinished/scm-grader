@@ -230,7 +230,7 @@ function StartView(props: {
     <section className="view">
       <div className="hero">
         <div>
-          <div className="eyebrow">Free practice grader</div>
+          <div className="eyebrow">Free for South Bay dental &amp; medical practices</div>
           <h1>See how patients find you online.</h1>
           <p className="lede">
             Enter your practice name and get your online health score in under a minute. We check your Google ranking,
@@ -298,6 +298,46 @@ function StartView(props: {
             <span>Every report includes your AI search visibility.</span>
           </p>
         </aside>
+      </div>
+      <ServiceArea />
+    </section>
+  );
+}
+
+/* ---------- Service area (start screen) ---------- */
+
+const AREAS: { name: string; cities: string[] }[] = [
+  { name: "Beach Cities", cities: ["Manhattan Beach", "Hermosa Beach", "Redondo Beach", "El Segundo"] },
+  { name: "Torrance & central South Bay", cities: ["Torrance", "Gardena", "Lawndale", "Hawthorne", "Inglewood", "Lomita"] },
+  { name: "Palos Verdes Peninsula", cities: ["Palos Verdes Estates", "Rancho Palos Verdes"] },
+  { name: "Harbor Area", cities: ["San Pedro", "Wilmington", "Harbor City", "Carson"] },
+];
+
+function ServiceArea() {
+  return (
+    <section className="areas" aria-labelledby="areas-h">
+      <div className="areas-intro">
+        <h2 id="areas-h">Free marketing audits for practices across the South Bay</h2>
+        <p>
+          The Practice Grader is built for dentists, orthodontists, medical clinics, chiropractors, med spas and physical
+          therapists in the South Bay. It checks how you show up when nearby patients search Google and ask ChatGPT, and
+          compares you with the practices ranking around you.
+        </p>
+      </div>
+      <div className="areas-grid">
+        {AREAS.map((a) => (
+          <div key={a.name} className="area">
+            <h3>{a.name}</h3>
+            <p>
+              {a.cities.map((c, i) => (
+                <span key={c} className="city">
+                  {c}
+                  {i < a.cities.length - 1 ? " · " : ""}
+                </span>
+              ))}
+            </p>
+          </div>
+        ))}
       </div>
     </section>
   );

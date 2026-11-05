@@ -4,9 +4,9 @@ import { GoogleAnalytics } from "@/components/Analytics";
 
 const SITE = (process.env.SITE_URL || "https://grader.southcoastmarketing.com").replace(/\/$/, "");
 
-const TITLE = "Free Dental & Medical Marketing Audit | South Coast Marketing";
+const TITLE = "Free Dental & Medical Marketing Audit | South Bay, LA";
 const DESCRIPTION =
-  "Free digital marketing audit for South Bay dentists and medical practices. See your Google ranking, website, reviews and AI search score in under a minute.";
+  "Free marketing audit for dentists and medical practices in Torrance, Redondo Beach & the South Bay. See your Google, website, reviews and AI search score.";
 const SHARE_TITLE = "Is your practice losing patients online? Get a free marketing score";
 const SHARE_DESCRIPTION =
   "Free for South Bay dentists and medical practices. See how you rank on Google, how your website and reviews stack up, and whether ChatGPT recommends you.";
