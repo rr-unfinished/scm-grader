@@ -5,6 +5,7 @@ import { CONTACT_EMAIL } from "@/lib/site";
 export const metadata: Metadata = {
   title: "Privacy policy | South Coast Marketing",
   description: "How South Coast Marketing handles information collected through the Practice Grader.",
+  alternates: { canonical: "/privacy" },
 };
 
 const UPDATED = "November 3, 2026";
