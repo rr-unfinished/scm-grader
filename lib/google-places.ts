@@ -21,7 +21,10 @@ export function placesConfigured(): boolean {
   return Boolean(process.env.GOOGLE_PLACES_API_KEY);
 }
 
-async function call<T>(path: string, init: { method: "GET" | "POST"; fieldMask: string; body?: unknown }): Promise<T> {
+async function call<T>(
+  path: string,
+  init: { method: "GET" | "POST"; fieldMask: string; body?: unknown; revalidateSeconds?: number },
+): Promise<T> {
   const key = process.env.GOOGLE_PLACES_API_KEY;
   if (!key) throw new PlacesError("GOOGLE_PLACES_API_KEY is not set");
   const res = await fetch(`${BASE}${path}`, {
@@ -33,7 +36,8 @@ async function call<T>(path: string, init: { method: "GET" | "POST"; fieldMask: 
     },
     body: init.body === undefined ? undefined : JSON.stringify(init.body),
     signal: AbortSignal.timeout(TIMEOUT_MS),
-    cache: "no-store",
+    // Live scans never cache; city pages cache their search for a day.
+    ...(init.revalidateSeconds ? { next: { revalidate: init.revalidateSeconds } } : { cache: "no-store" as const }),
   });
   if (!res.ok) {
     // Log Google's message for debugging in Vercel logs; never echo it to the browser.
@@ -141,15 +145,18 @@ export interface SearchResult {
   displayName?: { text: string };
   rating?: number;
   userRatingCount?: number;
+  googleMapsUri?: string;
 }
 
 export async function searchNearby(
   query: string,
   center: { latitude: number; longitude: number },
+  opts: { revalidateSeconds?: number; withMapsLink?: boolean } = {},
 ): Promise<SearchResult[]> {
   const data = await call<{ places?: SearchResult[] }>("/places:searchText", {
     method: "POST",
-    fieldMask: "places.id,places.displayName,places.rating,places.userRatingCount",
+    revalidateSeconds: opts.revalidateSeconds,
+    fieldMask: `places.id,places.displayName,places.rating,places.userRatingCount${opts.withMapsLink ? ",places.googleMapsUri" : ""}`,
     body: {
       textQuery: query,
       pageSize: 20,

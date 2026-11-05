@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { AREAS, citySlug } from "@/lib/cities";
 import { PRACTICE_TYPES, SOUTH_BAY_CITIES, cityFromAddress } from "@/lib/practice-types";
 import type { PracticeType, Report } from "@/lib/types";
 import { CheckIcon, SparkleIcon } from "./icons";
@@ -46,10 +47,38 @@ function newToken() {
   }
 }
 
-export default function Grader() {
+export interface GraderIntro {
+  eyebrow: string;
+  heading: string;
+  lede: string;
+}
+
+const DEFAULT_INTRO: GraderIntro = {
+  eyebrow: "Free for South Bay dental & medical practices",
+  heading: "See how South Bay patients find you online.",
+  lede: "Enter your practice name and get your online health score in under a minute. We check your Google ranking, website, reviews, and AI search.",
+};
+
+export default function Grader({
+  initialCity,
+  intro = DEFAULT_INTRO,
+  below,
+}: {
+  /** Preselects the city (city pages) */
+  initialCity?: string;
+  /** Start screen copy; defaults to the home page's */
+  intro?: GraderIntro;
+  /** Shown under the start screen; defaults to the South Bay cities section */
+  below?: React.ReactNode;
+} = {}) {
   const [view, setView] = useState<View>("start");
   const [practiceName, setPracticeName] = useState("");
-  const [city, setCity] = useState<string>(SOUTH_BAY_CITIES[0]);
+  const [city, setCity] = useState<string>(initialCity ?? SOUTH_BAY_CITIES[0]);
+  // The page the grader lives on, so "Grade another practice" returns there.
+  const homePath = useRef("/");
+  useEffect(() => {
+    homePath.current = window.location.pathname.startsWith("/r/") ? "/" : window.location.pathname;
+  }, []);
   const [practiceType, setPracticeType] = useState<PracticeType | "">("");
   const [lead, setLead] = useState<Lead>(EMPTY_LEAD);
   const [step, setStep] = useState(1);
@@ -82,6 +111,8 @@ export default function Grader() {
   if (view === "start") {
     return (
       <StartView
+        intro={intro}
+        below={below}
         practiceName={practiceName}
         picked={picked}
         sessionToken={sessionToken}
@@ -200,7 +231,7 @@ export default function Grader() {
         report={report}
         firstName={lead.firstName.trim()}
         onAgain={() => {
-          window.history.replaceState(null, "", "/");
+          window.history.replaceState(null, "", homePath.current);
           reset();
         }}
         reportId={report.reportId}
@@ -215,6 +246,8 @@ export default function Grader() {
 /* ---------- Start ---------- */
 
 function StartView(props: {
+  intro: GraderIntro;
+  below?: React.ReactNode;
   practiceName: string;
   picked: PickedPlace | null;
   sessionToken: string;
@@ -230,12 +263,9 @@ function StartView(props: {
     <section className="view">
       <div className="hero">
         <div>
-          <div className="eyebrow">Free for South Bay dental &amp; medical practices</div>
-          <h1>See how South Bay patients find you online.</h1>
-          <p className="lede">
-            Enter your practice name and get your online health score in under a minute. We check your Google ranking,
-            website, reviews, and AI search.
-          </p>
+          <div className="eyebrow">{props.intro.eyebrow}</div>
+          <h1>{props.intro.heading}</h1>
+          <p className="lede">{props.intro.lede}</p>
           <form
             className="lookup"
             noValidate
@@ -299,19 +329,12 @@ function StartView(props: {
           </p>
         </aside>
       </div>
-      <ServiceArea />
+      {props.below ?? <ServiceArea />}
     </section>
   );
 }
 
 /* ---------- Service area (start screen) ---------- */
-
-const AREAS: { name: string; cities: string[] }[] = [
-  { name: "Beach Cities", cities: ["Manhattan Beach", "Hermosa Beach", "Redondo Beach", "El Segundo"] },
-  { name: "Torrance & central South Bay", cities: ["Torrance", "Gardena", "Lawndale", "Hawthorne", "Inglewood", "Lomita"] },
-  { name: "Palos Verdes Peninsula", cities: ["Palos Verdes Estates", "Rancho Palos Verdes"] },
-  { name: "Harbor Area", cities: ["San Pedro", "Wilmington", "Harbor City", "Carson"] },
-];
 
 function ServiceArea() {
   return (
@@ -330,7 +353,9 @@ function ServiceArea() {
             <h3>{a.name}</h3>
             <ul className="cities">
               {a.cities.map((c) => (
-                <li key={c}>{c}</li>
+                <li key={c}>
+                  <a href={`/${citySlug(c)}`}>{c}</a>
+                </li>
               ))}
             </ul>
           </div>

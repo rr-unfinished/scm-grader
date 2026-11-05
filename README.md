@@ -88,6 +88,17 @@ Setup:
 2. **Cloudflare:** dashboard → **Turnstile** → **Add widget**. Name it `scm-grader`, add your grader's hostname (for example `scm-grader.vercel.app`), mode **Managed**. Copy both keys.
 3. **Vercel:** add `NEXT_PUBLIC_TURNSTILE_SITE_KEY` (site key) and `TURNSTILE_SECRET_KEY` (secret key), plus `NEXT_PUBLIC_CONTACT_EMAIL` and `NEXT_PUBLIC_CONTACT_PHONE` for the footer and privacy page. Redeploy; `NEXT_PUBLIC_` values are built into the page.
 
+## City pages
+
+`/torrance`, `/redondo-beach` and the other 14 South Bay cities each get a page with:
+
+- a city title, description, headline and the grader with that city preselected
+- real local numbers from Google Maps for "dentist" searched from the city center: average rating and typical review count of the top 10, how many have 100+ reviews, and the top 5 practices
+- nearby cities (by distance) and links to every other city page
+- WebPage, Service and BreadcrumbList structured data
+
+Pages are built ahead of time and refresh once a day, so they cost at most 16 Google searches a day. Without a Google key they show general copy instead of numbers. All 16 are in the sitemap, and the home page's city list links to them.
+
 ## Run it locally
 
 You need Node 20 or newer.
@@ -135,6 +146,7 @@ app/api/places/autocomplete/route.ts   Practice search, proxied so the key stays
 app/api/book/route.ts                  Records a call request and notifies South Coast once
 app/r/[id]/page.tsx                    Saved report page (private link, not indexed)
 app/privacy/page.tsx                   Privacy policy
+app/[city]/page.tsx                    City pages (16, refreshed daily)
 supabase/schema.sql                    Leads table, run once in Supabase
 ```
 
