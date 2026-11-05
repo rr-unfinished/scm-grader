@@ -328,14 +328,11 @@ function ServiceArea() {
         {AREAS.map((a) => (
           <div key={a.name} className="area">
             <h3>{a.name}</h3>
-            <p>
-              {a.cities.map((c, i) => (
-                <span key={c} className="city">
-                  {c}
-                  {i < a.cities.length - 1 ? " · " : ""}
-                </span>
+            <ul className="cities">
+              {a.cities.map((c) => (
+                <li key={c}>{c}</li>
               ))}
-            </p>
+            </ul>
           </div>
         ))}
       </div>
