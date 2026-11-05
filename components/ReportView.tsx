@@ -6,6 +6,7 @@ import { GRADE_LABEL, gradeOf } from "@/lib/scoring";
 import type { Report } from "@/lib/types";
 import { CheckIcon, CrossIcon } from "./icons";
 import ScoreRing from "./ScoreRing";
+import { track } from "@/lib/track";
 
 const usd = (n: number) => `$${n.toLocaleString("en-US")}`;
 
@@ -44,6 +45,7 @@ export default function ReportView({
         body: JSON.stringify({ reportId }),
       });
       setBooking(res.ok ? "done" : "error");
+      if (res.ok) track("grader_book_call", { practice_type: report.practiceType, city: report.city, score: report.total });
     } catch {
       setBooking("error");
     }
@@ -51,6 +53,7 @@ export default function ReportView({
 
   const copy = async () => {
     if (!link) return;
+    track("grader_copy_link");
     try {
       await navigator.clipboard.writeText(link);
       setCopied(true);

@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "/privacy" },
 };
 
-const UPDATED = "November 3, 2026";
+const UPDATED = "November 4, 2026";
 
 export default function Privacy() {
   return (
@@ -37,7 +37,9 @@ export default function Privacy() {
           </p>
           <p>
             <b>Basic technical information:</b> to prevent abuse we keep a one-way, scrambled code made from your IP address.
-            We don&apos;t store the IP address itself. Our hosting provider also keeps standard server logs.
+            We don&apos;t store the IP address itself. Our hosting provider also keeps standard server logs. We also use
+            Google Analytics cookies to see which pages and steps people use, so we can improve the tool. You can block
+            these cookies in your browser settings.
           </p>
           <p>
             The grader is about your practice&apos;s online presence. Please don&apos;t enter any patient information.
@@ -69,6 +71,7 @@ export default function Privacy() {
             <li><b>Google</b> provides practice listings and website speed results.</li>
             <li><b>OpenAI</b> answers the AI search questions. We send it only your practice type and city, never your name, email or phone.</li>
             <li><b>Cloudflare</b> checks that visitors aren&apos;t bots.</li>
+            <li><b>Google Analytics and Google Tag Manager</b> measure how visitors use the grader, using cookies. We don&apos;t send them your name, email or phone.</li>
           </ul>
           <p>
             We may also share information if the law requires it, or as part of a sale or merger of our business.

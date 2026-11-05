@@ -6,6 +6,7 @@ import type { PracticeType, Report } from "@/lib/types";
 import { CheckIcon, SparkleIcon } from "./icons";
 import PracticeSearch, { type PickedPlace } from "./PracticeSearch";
 import ReportView from "./ReportView";
+import { track } from "@/lib/track";
 import Turnstile, { turnstileEnabled } from "./Turnstile";
 import ScoreRing from "./ScoreRing";
 
@@ -104,6 +105,7 @@ export default function Grader() {
           if (configured && !(picked && picked.name === practiceName))
             return setError("Pick your practice from the list so we scan the right Google listing.");
           setStep(1);
+          track("grader_start", { city, practice_found: Boolean(picked && picked.name === practiceName) });
           go("quiz");
         }}
       />
@@ -122,9 +124,12 @@ export default function Grader() {
         if (lead.phone.replace(/\D/g, "").length < 10) return setError("Enter a 10-digit mobile number.");
         if (turnstileEnabled && !humanToken)
           return setError("One moment while we check you're not a bot, then try again.");
+        track("grader_step", { step: 3, step_name: "contact" });
+        track("grader_scan_start", { practice_type: practiceType || undefined, city });
         return go("scan");
       }
       setError("");
+      track("grader_step", { step, step_name: step === 1 ? "practice_type" : "about_you" });
       setStep(step + 1);
     };
     const back = () => {
@@ -167,9 +172,12 @@ export default function Grader() {
           if (r.reportId) window.history.replaceState(null, "", `/r/${r.reportId}`);
           // A session token covers one autocomplete + details pair.
           setSessionToken(newToken());
+          track("generate_lead", { lead_source: "practice_grader", practice_type: r.practiceType, city: r.city, score: r.total });
+          track("grader_report_view", { practice_type: r.practiceType, city: r.city, score: r.total });
           go("report");
         }}
         onError={(msg, badListing) => {
+          track("grader_error", { reason: badListing ? "listing" : /bot/i.test(msg) ? "bot_check" : /limit|several scans/i.test(msg) ? "limit" : "scan" });
           setHumanToken(null); // tokens are single-use; step 3 gets a fresh one
           // A listing problem sends them back to search; anything else lets them retry.
           if (badListing) {
