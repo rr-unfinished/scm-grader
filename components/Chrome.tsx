@@ -1,5 +1,10 @@
 /* eslint-disable @next/next/no-img-element */
+import { citySlug } from "@/lib/cities";
+import { SOUTH_BAY_CITIES } from "@/lib/practice-types";
 import { CONTACT_EMAIL, CONTACT_EMAIL_HREF, CONTACT_PHONE, CONTACT_PHONE_HREF } from "@/lib/site";
+
+const CITIES_AZ = [...SOUTH_BAY_CITIES].sort((a, b) => a.localeCompare(b));
+
 export function SiteHeader() {
   return (
     <header className="top">
@@ -19,7 +24,17 @@ export function SiteHeader() {
 export function SiteFooter() {
   return (
     <footer>
-      <div className="wrap">
+      <nav className="wrap locations" aria-labelledby="locations-h">
+        <h2 id="locations-h">Locations</h2>
+        <ul>
+          {CITIES_AZ.map((c) => (
+            <li key={c}>
+              <a href={`/${citySlug(c)}`}>{c}</a>
+            </li>
+          ))}
+        </ul>
+      </nav>
+      <div className="wrap footer-bottom">
         <a className="fb" href="https://www.southcoastmarketing.com" aria-label="South Coast Marketing">
           <img src="/logo-white.png" alt="" />
           <span className="wm">
