@@ -21,7 +21,7 @@ type Props = { params: Promise<{ city: string }> };
 
 function copyFor(city: SouthBayCity) {
   return {
-    title: `Dental & Medical Marketing Audit in ${city}, CA`,
+    title: `Free Dental & Medical Marketing Audit in ${city}, CA - Instant Results`,
     description: `Free marketing audit for ${city} dentists and medical practices. See your Google map rank, reviews, website and AI search score.`,
   };
 }
